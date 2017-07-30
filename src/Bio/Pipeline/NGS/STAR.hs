@@ -70,7 +70,7 @@ starAlign :: FilePath                    -- ^ Genome alignment result
           -> FilePath                    -- ^ Annotation alignment result
           -> FilePath                    -- ^ STAR genome index
           -> STAROptSetter               -- ^ Options
-          -> MaybeTagged GZipped (FileSet 'Fastq 'Fastq)
+          -> MaybeTagged GZipped (MaybePaired (File 'Fastq))
           -> IO (File 'Bam, File 'Bam)
 starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
@@ -97,9 +97,9 @@ starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
                 then [ "--outSAMtype", "BAM", "SortedByCoordinate"
                      , "--limitBAMsortRAM", "60000000000" ]
                 else ["--outSAMtype", "BAM", "Unsorted"] ) ++
-            ( case fileset of
-                Single _   -> []
-                Paired _ _ -> ["--outSAMstrandField", "intronMotif"] ) ++
+            ( if isPaired fileset
+                then []
+                else ["--outSAMstrandField", "intronMotif"] ) ++
             ["--quantMode", "TranscriptomeSAM", "--sjdbScore", "1"]
 
         let starOutput | opt^.starSort = "/Aligned.sortedByCoord.out.bam"
@@ -125,7 +125,7 @@ starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
   where
     star = fromText $ T.pack $ opt^.starCmd
     inputs = case fileset of
-        Single fastq -> [fastq]
-        Paired f1 f2 -> [f1,f2]
+        Left fastq -> [fastq]
+        Right (f1, f2) -> [f1,f2]
     (fileset, isGzipped) = untagMaybe taggedFileset
     opt = execState setter defaultSTAROpts

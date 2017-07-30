@@ -65,11 +65,11 @@ bwaMkIndex input prefix = do
 bwaAlign :: FilePath  -- ^ Output bam filename
          -> FilePath  -- ^ Genome index
          -> BWAOptSetter
-         -> FileSet 'Fastq 'Fastq  -- ^ possibly paired
+         -> MaybePaired (File 'Fastq)  -- ^ possibly paired
          -> IO (File 'Bam)
 bwaAlign output index setter fileset = case fileset of
-    Single input         -> _bwaAlign1 output index opt input
-    Paired input1 input2 -> _bwaAlign2 output index opt input1 input2
+    Left input             -> _bwaAlign1 output index opt input
+    Right (input1, input2) -> _bwaAlign2 output index opt input1 input2
   where
     opt = execState setter defaultBWAOpts
 
