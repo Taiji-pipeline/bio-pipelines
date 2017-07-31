@@ -23,6 +23,7 @@ library
     Bio.Pipeline.NGS.RSEM
     Bio.Pipeline.NGS.BWA
     Bio.Pipeline.NGS.STAR
+    Bio.Pipeline.NGS.Utils
     Bio.Pipeline.Utils
     Bio.Pipeline.Instances
 

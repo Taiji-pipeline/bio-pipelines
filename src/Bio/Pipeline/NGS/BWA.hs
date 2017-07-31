@@ -11,7 +11,7 @@ module Bio.Pipeline.NGS.BWA
     , bwaReadTrim
     , bwaTmpDir
     , bwaMkIndex
-    , bwaAlign
+    , bwaAlign_
     ) where
 
 import           Bio.Data.Experiment
@@ -24,6 +24,7 @@ import           Shelly                   (cp, escaping, fromText, mkdir_p,
 import           System.FilePath          (takeDirectory)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
+import Data.Tagged (Tagged(..))
 
 data BWAOpts = BWAOpts
     { _bwaCores    :: Int          -- ^ number of cpu cores
@@ -62,14 +63,15 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign :: FilePath  -- ^ Output bam filename
-         -> FilePath  -- ^ Genome index
-         -> BWAOptSetter
-         -> MaybePaired (File 'Fastq)  -- ^ possibly paired
-         -> IO (File 'Bam)
-bwaAlign output index setter fileset = case fileset of
-    Left input             -> _bwaAlign1 output index opt input
-    Right (input1, input2) -> _bwaAlign2 output index opt input1 input2
+bwaAlign_ :: FilePath  -- ^ Output bam filename
+          -> FilePath  -- ^ Genome index
+          -> BWAOptSetter
+          -> MaybePaired (File 'Fastq)  -- ^ possibly paired
+          -> IO (MaybeTagged Pairend (File 'Bam))
+bwaAlign_ output index setter fileset = case fileset of
+    Left input             -> Left <$> _bwaAlign1 output index opt input
+    Right (input1, input2) -> Right . Tagged <$>
+        _bwaAlign2 output index opt input1 input2
   where
     opt = execState setter defaultBWAOpts
 
