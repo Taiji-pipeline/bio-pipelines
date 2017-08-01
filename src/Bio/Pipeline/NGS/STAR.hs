@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Bio.Pipeline.NGS.STAR
     ( STAROpts
     , STAROptSetter
@@ -22,6 +25,7 @@ import           Shelly                   (fromText, mkdir_p, mv, run_, shelly,
                                            test_d)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
+import Data.Proxy (Proxy(..))
 
 data STAROpts = STAROpts
     { _starCmd    :: FilePath
@@ -66,19 +70,23 @@ starMkIndex star dir fstqs anno r = do
     return dir
 
 -- | Align RNA-seq raw reads with STAR
-starAlign :: FilePath                    -- ^ Genome alignment result
+starAlign :: ( MayHave GZipped tags
+             , MayHave Pairend tags
+             , tags' ~ Remove 'GZipped tags )
+          => FilePath                    -- ^ Genome alignment result
           -> FilePath                    -- ^ Annotation alignment result
           -> FilePath                    -- ^ STAR genome index
           -> STAROptSetter               -- ^ Options
-          -> MaybeTagged GZipped (MaybePaired (File 'Fastq))
-          -> IO (File 'Bam, File 'Bam)
-starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
+          -> Either (File tags 'Fastq)
+                    (File tags 'Fastq, File tags 'Fastq)
+          -> IO (File tags' 'Bam, File tags' 'Bam)
+starAlign outputGenome outputAnno index setter dat = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
         run_ star $ ["--genomeDir", T.pack index, "--readFilesIn"] ++
             map (T.pack . (^.location)) inputs ++
             [ "--outFileNamePrefix", T.pack $ tmp_dir ++ "/"
             , "--runThreadN",  T.pack $ show $ opt^.starCores ] ++
-            ( if isGzipped then ["--readFilesCommand", "zcat"] else [] ) ++
+            ( if zipped then ["--readFilesCommand", "zcat"] else [] ) ++
             [ "--genomeLoad", "NoSharedMemory"
             , "--outFilterType", "BySJout"     -- reduces the number of ”spurious” junctions
             , "--outFilterMultimapNmax", "20"  -- max number of multiple alignments allowed for a read: if exceeded, the read is considered unmapped
@@ -97,9 +105,7 @@ starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
                 then [ "--outSAMtype", "BAM", "SortedByCoordinate"
                      , "--limitBAMsortRAM", "60000000000" ]
                 else ["--outSAMtype", "BAM", "Unsorted"] ) ++
-            ( if isPaired fileset
-                then []
-                else ["--outSAMstrandField", "intronMotif"] ) ++
+            ( if isPair then [] else ["--outSAMstrandField", "intronMotif"] ) ++
             ["--quantMode", "TranscriptomeSAM", "--sjdbScore", "1"]
 
         let starOutput | opt^.starSort = "/Aligned.sortedByCoord.out.bam"
@@ -124,8 +130,8 @@ starAlign outputGenome outputAnno index setter taggedFileset = withTempDirectory
         return (genomeAlignFile, annoFile)
   where
     star = fromText $ T.pack $ opt^.starCmd
-    inputs = case fileset of
-        Left fastq -> [fastq]
-        Right (f1, f2) -> [f1,f2]
-    (fileset, isGzipped) = untagMaybe taggedFileset
+    (inputs, zipped, isPair) = case dat of
+        Left fastq -> ( [fastq], isGzipped fastq, False)
+        Right (f1, f2) -> ([f1,f2], isGzipped f1
+            , if isPairend f1 then True else error "Must be pairended")
     opt = execState setter defaultSTAROpts

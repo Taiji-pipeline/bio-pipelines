@@ -63,8 +63,8 @@ defaultRSEMOpts = RSEMOpts
 rsemQuant :: FilePath         -- ^ Prefix
           -> FilePath         -- ^ Directory containing the index
           -> RSEMOptSetter
-          -> File 'Bam
-          -> IO (File 'Tsv, File 'Tsv)
+          -> File tags 'Bam
+          -> IO (File tags 'Tsv, File tags 'Tsv)
 rsemQuant outputPrefix indexPrefix setter input = shelly $ do
     run_ rsem $ [ "--bam", "--estimate-rspd", "--calc-ci"
         , "--seed", T.pack $ show $ opt^.rsemSeed

@@ -9,7 +9,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Bio.Pipeline.NGS.Utils where
 
-import Control.Arrow (first)
 import           Bio.Data.Bam             (bamToBed, readBam, runBam,
                                            sortedBamToBedPE)
 import           Bio.Data.Bed             (BED, BED3 (..), BEDLike (..), toLine)
@@ -19,7 +18,6 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib        (gzip, ungzip)
 import           Data.Maybe               (fromJust)
-import           Data.Tagged              (Tagged (..), untag)
 import qualified Data.Text                as T
 import           Shelly                   (escaping, fromText, mv, run_, shelly,
                                            silently)
@@ -29,10 +27,10 @@ import Data.Typeable
 -- | Remove low quality and redundant tags, fill in mate information.
 filterBam_ :: MayHave 'Pairend tags
            => FilePath  -- ^ output
-           -> Tagged tags (File 'Bam)
-           -> IO (Tagged tags (File 'Bam))
+           -> File tags 'Bam
+           -> IO (File tags 'Bam)
 filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
-    let input = T.pack $ fl'^.location
+    let input = T.pack $ fl^.location
     shelly $ escaping False $ silently $ do
         let tmp_filt = T.pack $ tmp ++ "/tmp_filt.bam"
             tmp_fixmate = T.pack $ tmp ++ "/tmp_fixmate.bam"
@@ -51,18 +49,16 @@ filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
                 , tmp_fixmate, "|", "samtools", "sort", "-", "-T"
                 , tmp_sort, "-l", "9", "-o", T.pack output ]
 
-    let filt = location .~ output $ emptyFile
-    return $ Tagged filt
+    return $ location .~ output $ emptyFile
   where
     isPair = elemTag (Proxy :: Proxy 'Pairend) fl
-    fl' = untag fl
 
 -- | Remove duplicates
 removeDuplicates_ :: Typeable (Elem 'Pairend tags)
                   => FilePath
                   -> FilePath
-                  -> Tagged tags (File 'Bam)
-                  -> IO (Tagged tags (File 'Bam), File 'Other)
+                  -> File tags 'Bam
+                  -> IO (File tags 'Bam, File '[] 'Other)
 removeDuplicates_ picardPath output input =
     withTempDirectory "./" "tmp_picard_dir." $ \tmp -> shelly $ do
         let qcFile = output ++ ".picard.qc"
@@ -70,7 +66,7 @@ removeDuplicates_ picardPath output input =
             filtTmp = tmp++"/dup_filt.bam"
         -- Mark duplicates
         run_ "java" ["-Xmx4G", "-jar", T.pack picardPath
-            , "MarkDuplicates", T.pack $ "INPUT=" ++ (input'^.location)
+            , "MarkDuplicates", T.pack $ "INPUT=" ++ (input^.location)
             , T.pack $ "OUTPUT=" ++ markdupTmp
             , T.pack $ "TMP_DIR=" ++ tmp
             , T.pack $ "METRICS_FILE=" ++ qcFile
@@ -89,31 +85,30 @@ removeDuplicates_ picardPath output input =
 
         let finalBam = tags .~ ["processed bam file"] $ location .~ output $ emptyFile
             dupQC =tags .~ ["picard qc file"] $ location .~ qcFile $ emptyFile
-        return (Tagged finalBam, dupQC)
+        return (finalBam, dupQC)
   where
     isPair = elemTag (Proxy :: Proxy 'Pairend) input
-    input' = untag input
 
 bam2Bed_ :: String    -- ^ Prefix
          -> (BED -> Bool)  -- ^ Filtering function
-         -> File 'Bam -> IO (Tagged '[GZipped] (File 'Bed))
+         -> File tags 'Bam -> IO (File (Insert 'GZipped tags) 'Bed)
 bam2Bed_ output fn fl = do
     runBam $ readBam (fl^.location) =$= bamToBed =$= filterC fn =$=
         mapC toLine =$= unlinesAsciiC =$= gzip $$ sinkFileBS output
-    return $ Tagged $ location .~ output $ emptyFile
+    return $ location .~ output $ emptyFile
 {-# INLINE bam2Bed_ #-}
 
 -- | Convert name sorted BAM to BEDPE suitable for MACS2.
 bam2BedPE_ :: Elem 'Sorted tags ~ 'True
            => String
            -> ((BED, BED) -> Bool)
-           -> Tagged tags (File 'Bam)
-           -> IO (Tagged 'GZipped (File 'Bed))
+           -> File tags 'Bam
+           -> IO (File (Insert 'GZipped tags) 'Bed)
 bam2BedPE_ output fn fl = do
-    runBam $ readBam (untag fl ^. location) =$= sortedBamToBedPE =$=
+    runBam $ readBam (fl^.location) =$= sortedBamToBedPE =$=
         filterC fn =$= concatMapC f =$= mapC toLine =$= unlinesAsciiC =$=
         gzip $$ sinkFileBS output
-    return $ Tagged $ location .~ output $ emptyFile
+    return $ location .~ output $ emptyFile
   where
     f (b1, b2)
         | chrom b1 /= chrom b2 || bedStrand b1 == bedStrand b2 = Nothing
@@ -127,13 +122,15 @@ bam2BedPE_ output fn fl = do
                   else error "Left coordinate is larger than right coordinate."
 {-# INLINE bam2BedPE_ #-}
 
+{-
 -- | Merge multiple BED files.
-mergeReplicatesBed :: FilePath -> [MaybeTagged 'GZipped (File 'Bed)]
-                   -> IO (Tagged 'GZipped (File 'Bed))
+mergeReplicatesBed :: FilePath -> [MaybeTagged 'GZipped (File '[] 'Bed)]
+                   -> IO (File '[GZipped] 'Bed)
 mergeReplicatesBed output fls = do
     let source = forM_ fls $ \fl -> case fl of
-            Right (Tagged x) -> sourceFileBS (x^.location) =$= ungzip
-            Left x           -> sourceFileBS (x^.location)
+            Right x -> sourceFileBS (x^.location) =$= ungzip
+            Left x  -> sourceFileBS (x^.location)
     runResourceT $ source =$= gzip $$ sinkFile output
-    return $ Tagged $ location .~ output $ emptyFile
+    return $ location .~ output $ emptyFile
 {-# INLINE mergeReplicatesBed #-}
+-}

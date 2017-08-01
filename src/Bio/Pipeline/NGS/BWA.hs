@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Bio.Pipeline.NGS.BWA
     ( BWAOpts
     , BWAOptSetter
@@ -63,23 +64,25 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign_ :: FilePath  -- ^ Output bam filename
+bwaAlign_ :: ( MayHave GZipped tags, MayHave Pairend tags)
+          => FilePath  -- ^ Output bam filename
           -> FilePath  -- ^ Genome index
           -> BWAOptSetter
-          -> MaybePaired (File 'Fastq)  -- ^ possibly paired
-          -> IO (MaybeTagged Pairend (File 'Bam))
+          -> MaybePaired (File tags 'Fastq)  -- ^ possibly paired
+          -> IO (File (Remove 'GZipped tags) 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
-    Left input             -> Left <$> _bwaAlign1 output index opt input
-    Right (input1, input2) -> Right . Tagged <$>
-        _bwaAlign2 output index opt input1 input2
+    Left input             -> _bwaAlign1 output index opt input
+    Right (input1, input2) -> if isPairend input1
+        then _bwaAlign2 output index opt input1 input2
+        else error "Must be pairend"
   where
     opt = execState setter defaultBWAOpts
 
 _bwaAlign1 :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
            -> BWAOpts
-           -> File 'Fastq
-           -> IO (File 'Bam)
+           -> File tags 'Fastq
+           -> IO (File (Remove 'GZipped tags) 'Bam)
 _bwaAlign1 output index opt fastq = do
     stats <- withTempDirectory (opt^.bwaTmpDir) "bwa_align_tmp_dir." $
         \tmpdir -> shelly $ escaping False $ do
@@ -103,9 +106,9 @@ _bwaAlign1 output index opt fastq = do
 _bwaAlign2 :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
            -> BWAOpts
-           -> File 'Fastq
-           -> File 'Fastq
-           -> IO (File 'Bam)
+           -> File tags 'Fastq
+           -> File tags 'Fastq
+           -> IO (File (Remove 'GZipped tags) 'Bam)
 _bwaAlign2 output index opt fastqF fastqR = do
     let input1 = T.pack $ fastqF^.location
         input2 = T.pack $ fastqR^.location

@@ -63,10 +63,10 @@ defaultCallPeakOpts = CallPeakOpts
 
 -- | Call peaks using MACS2.
 callPeaks :: FilePath           -- ^ Ouptut file
-          -> File 'Bed    -- ^ Sample
-          -> Maybe (File 'Bed)      -- ^ Input/control sample
+          -> File tags 'Bed    -- ^ Sample
+          -> Maybe (File tags 'Bed)      -- ^ Input/control sample
           -> CallPeakOptSetter  -- ^ Options
-          -> IO (File 'NarrowPeak)
+          -> IO (File tags 'NarrowPeak)
 callPeaks output target input setter = do
     macs2 output (target^.location) (fmap (^.location) input)
         fileFormat opt
@@ -123,11 +123,11 @@ frip rs peaks = do
         (x, c) <- get
         put (x, c+1)
 
-idrMultiple :: [File 'NarrowPeak]   -- ^ Peaks
-            -> File 'NarrowPeak  -- ^ Merged peaks
+idrMultiple :: [File tags 'NarrowPeak]   -- ^ Peaks
+            -> File tags 'NarrowPeak  -- ^ Merged peaks
             -> Double
             -> FilePath
-            -> IO (File 'NarrowPeak)
+            -> IO (File tags 'NarrowPeak)
 idrMultiple [x] _ _ _ = return x
 idrMultiple peakFiles merged th output =
     withTempDirectory "./" "tmp_idr_dir." $ \tmp -> do
@@ -147,12 +147,12 @@ idrMultiple peakFiles merged th output =
     comb _ = []
 
 -- | Perform Irreproducible Discovery Rate (IDR) analysis
-idr :: File 'NarrowPeak  -- ^ Peak 1
-    -> File 'NarrowPeak  -- ^ Peak 2
-    -> File 'NarrowPeak  -- ^ Peaks called from merged replicates (relax threshold)
+idr :: File tags 'NarrowPeak  -- ^ Peak 1
+    -> File tags 'NarrowPeak  -- ^ Peak 2
+    -> File tags 'NarrowPeak  -- ^ Peaks called from merged replicates (relax threshold)
     -> Double    -- ^ IDR threshold
     -> FilePath  -- ^ Output
-    -> IO (File 'NarrowPeak)
+    -> IO (File tags 'NarrowPeak)
 idr peak1 peak2 peakMerged th output = do
     shelly $ run_ "idr" [ "--samples", p1, p2, "--peak-list", pm
         , "--input-file-type", "narrowPeak", "--rank", "signal.value"
