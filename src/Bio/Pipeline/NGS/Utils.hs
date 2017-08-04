@@ -25,10 +25,10 @@ import           System.IO.Temp           (withTempDirectory)
 import Data.Typeable
 
 -- | Remove low quality and redundant tags, fill in mate information.
-filterBam_ :: MayHave 'Pairend tags
+filterBam_ :: (MayHave 'Pairend tags, tags' ~ Insert 'Sorted tags)
            => FilePath  -- ^ output
            -> File tags 'Bam
-           -> IO (File tags 'Bam)
+           -> IO (File tags' 'Bam)
 filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
     let input = T.pack $ fl^.location
     shelly $ escaping False $ silently $ do
@@ -89,7 +89,7 @@ removeDuplicates_ picardPath output input =
   where
     isPair = elemTag (Proxy :: Proxy 'Pairend) input
 
-bam2Bed_ :: String    -- ^ Prefix
+bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function
          -> File tags 'Bam -> IO (File (Insert 'GZipped tags) 'Bed)
 bam2Bed_ output fn fl = do

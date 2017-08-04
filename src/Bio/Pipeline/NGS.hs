@@ -17,9 +17,8 @@ module Bio.Pipeline.NGS
     , bwaMkIndex
     , bwaAlign
     , filterBam
-    --, removeDuplicates
-    --, bam2Bed
-    --, bam2BedPE
+    , removeDuplicates
+    , bamToBed
 
     , STAROpts
     , STAROptSetter
@@ -39,8 +38,6 @@ module Bio.Pipeline.NGS
     , rsemQuant
     ) where
 
-import           Bio.Data.Bam             (bamToBed, readBam, runBam,
-                                           sortedBamToBedPE)
 import           Bio.Data.Bed             (BED, BED3 (..), BEDLike (..), toLine)
 import           Bio.Data.Experiment
 import           Conduit
@@ -59,33 +56,51 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-
 bwaAlign :: (MayHave 'Pairend tags, MayHave 'GZipped tags)
-         => FilePath
+         => (FilePath, String)
          -> FilePath
          -> BWAOptSetter
          -> ATACSeq (MaybePaired (File tags 'Fastq))
          -> IO (ATACSeq (File (Remove 'GZipped tags) 'Bam))
-bwaAlign dir index opt atac = atac & replicates.traverse %%~
-    (\r -> r & files %%~ align r)
-  where
-    align r = bwaAlign_ output index opt
-      where
-        output = printf "%s/%s_rep%d.bam" dir (T.unpack $ atac^.eid) (r^.number)
+bwaAlign (dir, suffix) index opt = nameWith (dir++"/") suffix $ \output input ->
+    bwaAlign_ output index opt input
 
-filterBam :: MayHave 'Pairend tags
-          => FilePath
-          -> ATACSeq (File tags 'Bam)
-          -> IO (ATACSeq (File tags 'Bam))
-filterBam dir e = e & replicates.traverse %%~
-    (\r -> r & files %%~ fn r)
-  where
-    fn r fl = filterBam_ output fl
-      where
-        output = printf "%s/%s_rep%d.filt.bam" dir (T.unpack $ e^.eid) (r^.number)
+filterBam :: ( MayHave 'Pairend tags, Experiment experiment
+             , tags' ~ Insert 'Sorted tags )
+          => (FilePath, String)
+          -> experiment (File tags 'Bam)
+          -> IO (experiment (File tags' 'Bam))
+filterBam (dir, suffix) = nameWith (dir++"/") suffix filterBam_
 
-        {-
-removeDuplicates :: FilePath
-                 -> ATACSeq (MaybeTagged Pairend (Tagged Sorted (File 'Bam)))
-                 -> IO (ATACSeq (MaybeTagged Pairend (File 'Bam)))
-                 -}
+removeDuplicates :: (Experiment experiment, MayHave 'Pairend tags)
+                 => FilePath   -- ^ picard
+                 -> (FilePath, String)
+                 -> experiment (File tags 'Bam)
+                 -> IO (experiment (File tags 'Bam, File '[] 'Other))
+removeDuplicates picard (dir, suffix) = nameWith (dir++"/") suffix
+    (removeDuplicates_ picard)
+
+bamToBed :: ( Experiment experiment
+            , MayHave 'Pairend tags, Elem 'Sorted tags ~ 'True)
+         => (FilePath, String)
+         -> experiment (File tags 'Bam)
+         -> IO (experiment (File (Insert 'GZipped tags) 'Bed))
+bamToBed (dir, suffix) = nameWith (dir ++ "/") suffix fn
+  where
+    fn output fl = if isPairend fl
+        then bam2Bed_ output (const True) fl
+        else bam2BedPE_ output (const True) fl
+
+nameWith :: (Experiment experiment, Monad m)
+         => String   -- ^ Prefix
+         -> String   -- ^ Suffix
+         -> (FilePath -> file -> m file')
+         -> experiment file
+         -> m (experiment file')
+nameWith prefix suffix fn e = e & replicates.traverse %%~ (\r -> r & files %%~ f r)
+  where
+    f r fl = fn output fl
+      where
+        output = printf "%s%s_rep%d.%s" prefix (T.unpack $ e^.eid)
+            (r^.number) suffix
+{-# INLINE nameWith #-}
