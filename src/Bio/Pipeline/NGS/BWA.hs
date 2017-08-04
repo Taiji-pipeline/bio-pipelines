@@ -25,7 +25,6 @@ import           Shelly                   (cp, escaping, fromText, mkdir_p,
 import           System.FilePath          (takeDirectory)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
-import Data.Tagged (Tagged(..))
 
 data BWAOpts = BWAOpts
     { _bwaCores    :: Int          -- ^ number of cpu cores
@@ -64,12 +63,12 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign_ :: ( MayHave GZipped tags, MayHave Pairend tags)
+bwaAlign_ :: ( MayHave 'Gzip tags, MayHave 'Pairend tags)
           => FilePath  -- ^ Output bam filename
           -> FilePath  -- ^ Genome index
           -> BWAOptSetter
           -> MaybePaired (File tags 'Fastq)  -- ^ possibly paired
-          -> IO (File (Remove 'GZipped tags) 'Bam)
+          -> IO (File (Remove 'Gzip tags) 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
     Left input             -> _bwaAlign1 output index opt input
     Right (input1, input2) -> if isPairend input1
@@ -82,7 +81,7 @@ _bwaAlign1 :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
            -> BWAOpts
            -> File tags 'Fastq
-           -> IO (File (Remove 'GZipped tags) 'Bam)
+           -> IO (File (Remove 'Gzip tags) 'Bam)
 _bwaAlign1 output index opt fastq = do
     stats <- withTempDirectory (opt^.bwaTmpDir) "bwa_align_tmp_dir." $
         \tmpdir -> shelly $ escaping False $ do
@@ -108,7 +107,7 @@ _bwaAlign2 :: FilePath  -- ^ Path for the output bam file
            -> BWAOpts
            -> File tags 'Fastq
            -> File tags 'Fastq
-           -> IO (File (Remove 'GZipped tags) 'Bam)
+           -> IO (File (Remove 'Gzip tags) 'Bam)
 _bwaAlign2 output index opt fastqF fastqR = do
     let input1 = T.pack $ fastqF^.location
         input2 = T.pack $ fastqR^.location

@@ -56,12 +56,12 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-bwaAlign :: (MayHave 'Pairend tags, MayHave 'GZipped tags)
+bwaAlign :: (MayHave 'Pairend tags, MayHave 'Gzip tags)
          => (FilePath, String)
          -> FilePath
          -> BWAOptSetter
          -> ATACSeq (MaybePaired (File tags 'Fastq))
-         -> IO (ATACSeq (File (Remove 'GZipped tags) 'Bam))
+         -> IO (ATACSeq (File (Remove 'Gzip tags) 'Bam))
 bwaAlign (dir, suffix) index opt = nameWith (dir++"/") suffix $ \output input ->
     bwaAlign_ output index opt input
 
@@ -84,7 +84,7 @@ bamToBed :: ( Experiment experiment
             , MayHave 'Pairend tags, Elem 'Sorted tags ~ 'True)
          => (FilePath, String)
          -> experiment (File tags 'Bam)
-         -> IO (experiment (File (Insert 'GZipped tags) 'Bed))
+         -> IO (experiment (File (Insert 'Gzip tags) 'Bed))
 bamToBed (dir, suffix) = nameWith (dir ++ "/") suffix fn
   where
     fn output fl = if isPairend fl

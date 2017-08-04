@@ -25,7 +25,6 @@ import           Shelly                   (fromText, mkdir_p, mv, run_, shelly,
                                            test_d)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
-import Data.Proxy (Proxy(..))
 
 data STAROpts = STAROpts
     { _starCmd    :: FilePath
@@ -70,9 +69,9 @@ starMkIndex star dir fstqs anno r = do
     return dir
 
 -- | Align RNA-seq raw reads with STAR
-starAlign :: ( MayHave GZipped tags
+starAlign :: ( MayHave 'Gzip tags
              , MayHave Pairend tags
-             , tags' ~ Remove 'GZipped tags )
+             , tags' ~ Remove 'Gzip tags )
           => FilePath                    -- ^ Genome alignment result
           -> FilePath                    -- ^ Annotation alignment result
           -> FilePath                    -- ^ STAR genome index

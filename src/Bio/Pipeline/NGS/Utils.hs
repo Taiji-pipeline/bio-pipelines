@@ -91,7 +91,7 @@ removeDuplicates_ picardPath output input =
 
 bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function
-         -> File tags 'Bam -> IO (File (Insert 'GZipped tags) 'Bed)
+         -> File tags 'Bam -> IO (File (Insert 'Gzip tags) 'Bed)
 bam2Bed_ output fn fl = do
     runBam $ readBam (fl^.location) =$= bamToBed =$= filterC fn =$=
         mapC toLine =$= unlinesAsciiC =$= gzip $$ sinkFileBS output
@@ -103,7 +103,7 @@ bam2BedPE_ :: Elem 'Sorted tags ~ 'True
            => String
            -> ((BED, BED) -> Bool)
            -> File tags 'Bam
-           -> IO (File (Insert 'GZipped tags) 'Bed)
+           -> IO (File (Insert 'Gzip tags) 'Bed)
 bam2BedPE_ output fn fl = do
     runBam $ readBam (fl^.location) =$= sortedBamToBedPE =$=
         filterC fn =$= concatMapC f =$= mapC toLine =$= unlinesAsciiC =$=
@@ -124,8 +124,13 @@ bam2BedPE_ output fn fl = do
 
 {-
 -- | Merge multiple BED files.
-mergeReplicatesBed :: FilePath -> [MaybeTagged 'GZipped (File '[] 'Bed)]
-                   -> IO (File '[GZipped] 'Bed)
+mergeReplicatesBed :: MayHave 'Gzip
+                   => FilePath
+                   -> HVec [File tags 'Bed]
+                   -> IO (File '[Gzip] 'Bed)
+mergeReplicatesBed = undefined
+-}
+{-
 mergeReplicatesBed output fls = do
     let source = forM_ fls $ \fl -> case fl of
             Right x -> sourceFileBS (x^.location) =$= ungzip
