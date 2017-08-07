@@ -25,6 +25,8 @@ import           Shelly                   (cp, escaping, fromText, mkdir_p,
 import           System.FilePath          (takeDirectory)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
+import Data.Promotion.Prelude.List (Delete, Insert)
+import Data.Singletons (SingI)
 
 data BWAOpts = BWAOpts
     { _bwaCores    :: Int          -- ^ number of cpu cores
@@ -63,15 +65,15 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign_ :: ( MayHave 'Gzip tags, MayHave 'Pairend tags)
+bwaAlign_ :: SingI tags
           => FilePath  -- ^ Output bam filename
           -> FilePath  -- ^ Genome index
           -> BWAOptSetter
           -> MaybePaired (File tags 'Fastq)  -- ^ possibly paired
-          -> IO (File (Remove 'Gzip tags) 'Bam)
+          -> IO (File (Delete 'Gzip tags) 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
     Left input             -> _bwaAlign1 output index opt input
-    Right (input1, input2) -> if isPairend input1
+    Right (input1, input2) -> if input1 `hasTag` Pairend
         then _bwaAlign2 output index opt input1 input2
         else error "Must be pairend"
   where
@@ -81,7 +83,7 @@ _bwaAlign1 :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
            -> BWAOpts
            -> File tags 'Fastq
-           -> IO (File (Remove 'Gzip tags) 'Bam)
+           -> IO (File (Delete 'Gzip tags) 'Bam)
 _bwaAlign1 output index opt fastq = do
     stats <- withTempDirectory (opt^.bwaTmpDir) "bwa_align_tmp_dir." $
         \tmpdir -> shelly $ escaping False $ do
@@ -107,7 +109,7 @@ _bwaAlign2 :: FilePath  -- ^ Path for the output bam file
            -> BWAOpts
            -> File tags 'Fastq
            -> File tags 'Fastq
-           -> IO (File (Remove 'Gzip tags) 'Bam)
+           -> IO (File (Delete 'Gzip tags) 'Bam)
 _bwaAlign2 output index opt fastqF fastqR = do
     let input1 = T.pack $ fastqF^.location
         input2 = T.pack $ fastqR^.location

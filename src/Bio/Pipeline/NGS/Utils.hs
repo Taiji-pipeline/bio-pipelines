@@ -15,6 +15,7 @@ import           Bio.Data.Bed             (BED, BED3 (..), BEDLike (..), toLine)
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
+import qualified Data.ByteString as B
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib        (gzip, ungzip)
 import           Data.Maybe               (fromJust)
@@ -22,10 +23,12 @@ import qualified Data.Text                as T
 import           Shelly                   (escaping, fromText, mv, run_, shelly,
                                            silently)
 import           System.IO.Temp           (withTempDirectory)
-import Data.Typeable
+import Data.Promotion.Prelude.List
+import Data.Promotion.Prelude.Eq
+import Data.Singletons (SingI)
 
 -- | Remove low quality and redundant tags, fill in mate information.
-filterBam_ :: (MayHave 'Pairend tags, tags' ~ Insert 'Sorted tags)
+filterBam_ :: (SingI tags, tags' ~ Insert 'Sorted tags)
            => FilePath  -- ^ output
            -> File tags 'Bam
            -> IO (File tags' 'Bam)
@@ -51,10 +54,10 @@ filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
 
     return $ location .~ output $ emptyFile
   where
-    isPair = elemTag (Proxy :: Proxy 'Pairend) fl
+    isPair = fl `hasTag` Pairend
 
 -- | Remove duplicates
-removeDuplicates_ :: Typeable (Elem 'Pairend tags)
+removeDuplicates_ :: SingI tags
                   => FilePath
                   -> FilePath
                   -> File tags 'Bam
@@ -87,7 +90,7 @@ removeDuplicates_ picardPath output input =
             dupQC =tags .~ ["picard qc file"] $ location .~ qcFile $ emptyFile
         return (finalBam, dupQC)
   where
-    isPair = elemTag (Proxy :: Proxy 'Pairend) input
+    isPair = input `hasTag` Pairend
 
 bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function
@@ -122,20 +125,16 @@ bam2BedPE_ output fn fl = do
                   else error "Left coordinate is larger than right coordinate."
 {-# INLINE bam2BedPE_ #-}
 
-{-
 -- | Merge multiple BED files.
-mergeReplicatesBed :: MayHave 'Gzip
-                   => FilePath
-                   -> HVec [File tags 'Bed]
-                   -> IO (File '[Gzip] 'Bed)
-mergeReplicatesBed = undefined
--}
-{-
-mergeReplicatesBed output fls = do
-    let source = forM_ fls $ \fl -> case fl of
-            Right x -> sourceFileBS (x^.location) =$= ungzip
-            Left x  -> sourceFileBS (x^.location)
+concatBed_ :: SingI tags
+           => FilePath
+           -> [File tags 'Bed]
+           -> IO (File '[Gzip] 'Bed)
+concatBed_ output fls = do
     runResourceT $ source =$= gzip $$ sinkFile output
     return $ location .~ output $ emptyFile
-{-# INLINE mergeReplicatesBed #-}
--}
+  where
+    source = forM_ fls $ \fl -> if fl `hasTag` Gzip
+        then sourceFileBS (fl^.location) =$= ungzip
+        else sourceFileBS (fl^.location)
+{-# INLINE concatBed_ #-}

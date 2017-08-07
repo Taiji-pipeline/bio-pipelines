@@ -19,6 +19,7 @@ module Bio.Pipeline.NGS
     , filterBam
     , removeDuplicates
     , bamToBed
+    , concatBed
 
     , STAROpts
     , STAROptSetter
@@ -56,23 +57,27 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-bwaAlign :: (MayHave 'Pairend tags, MayHave 'Gzip tags)
+import Data.Promotion.Prelude.List (Elem, Delete, Insert, All)
+import Data.Singletons (SingI)
+import Data.Promotion.Prelude.Eq ((:==$$))
+
+bwaAlign :: SingI tags
          => (FilePath, String)
          -> FilePath
          -> BWAOptSetter
          -> ATACSeq (MaybePaired (File tags 'Fastq))
-         -> IO (ATACSeq (File (Remove 'Gzip tags) 'Bam))
+         -> IO (ATACSeq (File (Delete 'Gzip tags) 'Bam))
 bwaAlign (dir, suffix) index opt = nameWith (dir++"/") suffix $ \output input ->
     bwaAlign_ output index opt input
 
-filterBam :: ( MayHave 'Pairend tags, Experiment experiment
+filterBam :: ( SingI tags, Experiment experiment
              , tags' ~ Insert 'Sorted tags )
           => (FilePath, String)
           -> experiment (File tags 'Bam)
           -> IO (experiment (File tags' 'Bam))
 filterBam (dir, suffix) = nameWith (dir++"/") suffix filterBam_
 
-removeDuplicates :: (Experiment experiment, MayHave 'Pairend tags)
+removeDuplicates :: (Experiment experiment, SingI tags)
                  => FilePath   -- ^ picard
                  -> (FilePath, String)
                  -> experiment (File tags 'Bam)
@@ -80,16 +85,27 @@ removeDuplicates :: (Experiment experiment, MayHave 'Pairend tags)
 removeDuplicates picard (dir, suffix) = nameWith (dir++"/") suffix
     (removeDuplicates_ picard)
 
-bamToBed :: ( Experiment experiment
-            , MayHave 'Pairend tags, Elem 'Sorted tags ~ 'True)
+bamToBed :: ( Experiment experiment, SingI tags
+            , Elem 'Sorted tags ~ 'True )
          => (FilePath, String)
          -> experiment (File tags 'Bam)
          -> IO (experiment (File (Insert 'Gzip tags) 'Bed))
 bamToBed (dir, suffix) = nameWith (dir ++ "/") suffix fn
   where
-    fn output fl = if isPairend fl
+    fn output fl = if fl `hasTag` Pairend
         then bam2Bed_ output (const True) fl
         else bam2BedPE_ output (const True) fl
+
+concatBed :: ( SingI tags, Experiment experiment )
+                   => (FilePath, String)
+                   -> experiment (File tags 'Bed)
+                   -> IO (experiment (File '[Gzip] 'Bed))
+concatBed (dir, suffix) e = do
+    fl <- concatBed_ output fls
+    return $ e & replicates .~ [ Replicate fl [] 0 ]
+  where
+    fls = e^..replicates.folded.files
+    output = printf "%s/%s_rep0.%s" dir (T.unpack $ e^.eid) suffix
 
 nameWith :: (Experiment experiment, Monad m)
          => String   -- ^ Prefix

@@ -45,6 +45,7 @@ library
     , mtl
     , matrices >=0.4.4
     , tagged
+    , singletons
     , text
     , temporary
     , split
