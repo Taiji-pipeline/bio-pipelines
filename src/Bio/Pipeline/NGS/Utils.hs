@@ -28,7 +28,7 @@ import Data.Promotion.Prelude.Eq
 import Data.Singletons (SingI)
 
 -- | Remove low quality and redundant tags, fill in mate information.
-filterBam_ :: (SingI tags, tags' ~ Insert 'Sorted tags)
+filterBam_ :: (SingI tags, tags' ~ (Insert 'Sorted tags))
            => FilePath  -- ^ output
            -> File tags 'Bam
            -> IO (File tags' 'Bam)

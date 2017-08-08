@@ -65,17 +65,14 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign_ :: SingI tags
-          => FilePath  -- ^ Output bam filename
+bwaAlign_ :: FilePath  -- ^ Output bam filename
           -> FilePath  -- ^ Genome index
           -> BWAOptSetter
-          -> MaybePaired (File tags 'Fastq)  -- ^ possibly paired
+          -> MaybePair (File tags 'Fastq)  -- ^ possibly paired
           -> IO (File (Delete 'Gzip tags) 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
     Left input             -> _bwaAlign1 output index opt input
-    Right (input1, input2) -> if input1 `hasTag` Pairend
-        then _bwaAlign2 output index opt input1 input2
-        else error "Must be pairend"
+    Right (input1, input2) -> _bwaAlign2 output index opt input1 input2
   where
     opt = execState setter defaultBWAOpts
 

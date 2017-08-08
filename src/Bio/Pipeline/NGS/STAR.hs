@@ -26,6 +26,7 @@ import           Shelly                   (fromText, mkdir_p, mv, run_, shelly,
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
 import Data.Promotion.Prelude.List (Delete, Insert)
+import Data.Singletons (SingI)
 
 data STAROpts = STAROpts
     { _starCmd    :: FilePath
@@ -70,9 +71,7 @@ starMkIndex star dir fstqs anno r = do
     return dir
 
 -- | Align RNA-seq raw reads with STAR
-starAlign :: ( MayHave 'Gzip tags
-             , MayHave Pairend tags
-             , tags' ~ Delete 'Gzip tags )
+starAlign :: ( SingI tags, tags' ~ Delete 'Gzip tags )
           => FilePath                    -- ^ Genome alignment result
           -> FilePath                    -- ^ Annotation alignment result
           -> FilePath                    -- ^ STAR genome index
@@ -131,7 +130,7 @@ starAlign outputGenome outputAnno index setter dat = withTempDirectory
   where
     star = fromText $ T.pack $ opt^.starCmd
     (inputs, zipped, isPair) = case dat of
-        Left fastq -> ( [fastq], isGzipped fastq, False)
-        Right (f1, f2) -> ([f1,f2], isGzipped f1
-            , if isPairend f1 then True else error "Must be pairended")
+        Left fastq -> ( [fastq], fastq `hasTag` Gzip, False)
+        Right (f1, f2) -> ([f1,f2], f1 `hasTag` Gzip
+            , if f1 `hasTag` Pairend then True else error "Must be pairended")
     opt = execState setter defaultSTAROpts

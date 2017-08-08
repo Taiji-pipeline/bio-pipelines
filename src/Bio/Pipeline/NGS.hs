@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Bio.Pipeline.NGS
     ( BWAOpts
@@ -57,21 +58,20 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-import Data.Promotion.Prelude.List (Elem, Delete, Insert, All)
+import Data.Promotion.Prelude.List (Elem, Delete, All, Insert)
 import Data.Singletons (SingI)
 import Data.Promotion.Prelude.Eq ((:==$$))
 
-bwaAlign :: SingI tags
-         => (FilePath, String)
+bwaAlign :: (FilePath, String)
          -> FilePath
          -> BWAOptSetter
-         -> ATACSeq (MaybePaired (File tags 'Fastq))
+         -> ATACSeq (MaybePair (File tags 'Fastq))
          -> IO (ATACSeq (File (Delete 'Gzip tags) 'Bam))
 bwaAlign (dir, suffix) index opt = nameWith (dir++"/") suffix $ \output input ->
     bwaAlign_ output index opt input
 
 filterBam :: ( SingI tags, Experiment experiment
-             , tags' ~ Insert 'Sorted tags )
+             , tags' ~ (Insert 'Sorted tags) )
           => (FilePath, String)
           -> experiment (File tags 'Bam)
           -> IO (experiment (File tags' 'Bam))
@@ -96,10 +96,10 @@ bamToBed (dir, suffix) = nameWith (dir ++ "/") suffix fn
         then bam2Bed_ output (const True) fl
         else bam2BedPE_ output (const True) fl
 
-concatBed :: ( SingI tags, Experiment experiment )
-                   => (FilePath, String)
-                   -> experiment (File tags 'Bed)
-                   -> IO (experiment (File '[Gzip] 'Bed))
+concatBed :: (SingI tags, Experiment experiment)
+          => (FilePath, String)
+          -> experiment (File tags 'Bed)
+          -> IO (experiment (File '[Gzip] 'Bed))
 concatBed (dir, suffix) e = do
     fl <- concatBed_ output fls
     return $ e & replicates .~ [ Replicate fl [] 0 ]
