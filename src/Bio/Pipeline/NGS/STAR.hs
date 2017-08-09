@@ -122,10 +122,8 @@ starAlign outputGenome outputAnno index setter dat = withTempDirectory
                     "/Aligned.toTranscriptome.out.bam") $ fromText $
                     T.pack outputAnno
 
-        let genomeAlignFile = location .~ outputGenome $
-                tags .~ ["RNA genome align bam"] $ emptyFile
-            annoFile = location .~ outputAnno $
-                tags .~ ["RNA anno align bam"] $ emptyFile
+        let genomeAlignFile = location .~ outputGenome $ emptyFile
+            annoFile = location .~ outputAnno $ emptyFile
         return (genomeAlignFile, annoFile)
   where
     star = fromText $ T.pack $ opt^.starCmd

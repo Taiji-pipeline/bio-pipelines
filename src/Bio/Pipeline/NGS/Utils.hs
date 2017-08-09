@@ -86,8 +86,8 @@ removeDuplicates_ picardPath output input =
                 , T.pack $ tmp ++ "/tmp_sort", "-o", T.pack output ]
             else mv (fromText $ T.pack filtTmp) $ fromText $ T.pack output
 
-        let finalBam = tags .~ ["processed bam file"] $ location .~ output $ emptyFile
-            dupQC =tags .~ ["picard qc file"] $ location .~ qcFile $ emptyFile
+        let finalBam = location .~ output $ emptyFile
+            dupQC = location .~ qcFile $ emptyFile
         return (finalBam, dupQC)
   where
     isPair = input `hasTag` Pairend

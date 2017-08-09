@@ -71,8 +71,7 @@ callPeaks output target input setter = do
     macs2 output (target^.location) (fmap (^.location) input)
         fileFormat opt
     f <- frip (target^.location) output
-    return $ location .~ output $
-        tags .~ ["macs2"] $ info .~ [("FRiP", T.pack $ show f)] $ emptyFile
+    return $ location .~ output $ info .~ [("FRiP", T.pack $ show f)] $ emptyFile
   where
     opt = execState setter defaultCallPeakOpts
     fileFormat | opt^.pair = "BEDPE"
@@ -137,7 +136,7 @@ idrMultiple peakFiles merged th output =
             return (result^.location, n)
         let final = fst $ maximumBy (comparing snd) peaks
         shelly $ mv (fromText $ T.pack final) $ fromText $ T.pack output
-        return $ location .~ output $ tags .~ ["IDR"] $ emptyFile
+        return $ location .~ output $ emptyFile
   where
     numLine x = do
         c <- B.readFile x
@@ -157,8 +156,7 @@ idr peak1 peak2 peakMerged th output = do
     shelly $ run_ "idr" [ "--samples", p1, p2, "--peak-list", pm
         , "--input-file-type", "narrowPeak", "--rank", "signal.value"
         , "--idr-threshold", T.pack $ show th, "-o", T.pack output ]
-    return $ location .~ output $
-        tags .~ ["IDR"] $ emptyFile
+    return $ location .~ output $ emptyFile
   where
     p1 = T.pack $ peak1^.location
     p2 = T.pack $ peak2^.location

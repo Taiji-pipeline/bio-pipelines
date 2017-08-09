@@ -75,10 +75,8 @@ rsemQuant outputPrefix indexPrefix setter input = shelly $ do
             else [] ) ++
         [T.pack $ input^.location, T.pack indexPrefix, T.pack outputPrefix]
 
-    let geneQuant = location .~ outputPrefix ++ ".genes.results" $
-            tags .~ ["gene quantification"] $ emptyFile
-        transcirptQuant = location .~ outputPrefix ++ ".isoforms.results" $
-            tags .~ ["transcript quantification"] $ emptyFile
+    let geneQuant = location .~ outputPrefix ++ ".genes.results" $ emptyFile
+        transcirptQuant = location .~ outputPrefix ++ ".isoforms.results" $ emptyFile
     return (geneQuant, transcirptQuant)
   where
     rsem = fromText $ T.pack $ opt^.rsemPath ++ "rsem-calculate-expression"

@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Bio.Pipeline.NGS.BWA
     ( BWAOpts
     , BWAOptSetter
@@ -16,17 +17,17 @@ module Bio.Pipeline.NGS.BWA
     ) where
 
 import           Bio.Data.Experiment
-import           Control.Lens             ((.~), (^.))
-import           Control.Lens             (makeLenses)
+import           Control.Lens                ((.~), (^.))
+import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
-import qualified Data.Text                as T
-import           Shelly                   (cp, escaping, fromText, mkdir_p,
-                                           run_, shelly, test_f)
-import           System.FilePath          (takeDirectory)
-import           System.IO                (hPutStrLn, stderr)
-import           System.IO.Temp           (withTempDirectory)
-import Data.Promotion.Prelude.List (Delete, Insert)
-import Data.Singletons (SingI)
+import           Data.Promotion.Prelude.List (Delete, Insert)
+import           Data.Singletons             (SingI)
+import qualified Data.Text                   as T
+import           Shelly                      (cp, escaping, fromText, mkdir_p,
+                                              run_, shelly, test_f)
+import           System.FilePath             (takeDirectory)
+import           System.IO                   (hPutStrLn, stderr)
+import           System.IO.Temp              (withTempDirectory)
 
 data BWAOpts = BWAOpts
     { _bwaCores    :: Int          -- ^ number of cpu cores
@@ -65,14 +66,15 @@ bwaMkIndex input prefix = do
     return prefix
 
 -- | Tag alignment with BWA aligner.
-bwaAlign_ :: FilePath  -- ^ Output bam filename
+bwaAlign_ :: (tags1' ~ Delete 'Gzip tags1, tags2' ~ Delete 'Gzip tags2)
+          => FilePath  -- ^ Output bam filename
           -> FilePath  -- ^ Genome index
           -> BWAOptSetter
-          -> MaybePair (File tags 'Fastq)  -- ^ possibly paired
-          -> IO (File (Delete 'Gzip tags) 'Bam)
+          -> MaybePair tags1 tags2 'Fastq
+          -> IO (EitherTag tags1' tags2' 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
-    Left input             -> _bwaAlign1 output index opt input
-    Right (input1, input2) -> _bwaAlign2 output index opt input1 input2
+    Left input             -> Left <$> _bwaAlign1 output index opt input
+    Right (input1, input2) -> Right <$> _bwaAlign2 output index opt input1 input2
   where
     opt = execState setter defaultBWAOpts
 

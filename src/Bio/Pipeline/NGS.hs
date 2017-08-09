@@ -1,11 +1,10 @@
 {-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE GADTs                #-}
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TemplateHaskell      #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators        #-}
 
 module Bio.Pipeline.NGS
     ( BWAOpts
@@ -40,35 +39,26 @@ module Bio.Pipeline.NGS
     , rsemQuant
     ) where
 
-import           Bio.Data.Bed             (BED, BED3 (..), BEDLike (..), toLine)
 import           Bio.Data.Experiment
-import           Conduit
 import           Control.Lens
-import           Control.Monad.State.Lazy
-import           Data.Conduit.Zlib        (gzip, ungzip)
-import           Data.Maybe               (fromJust)
-import Data.Typeable (Typeable)
-import qualified Data.Text                as T
-import           Shelly                   (escaping, fromText, mv, run_, shelly,
-                                           silently)
-import Text.Printf (printf)
+import           Data.Promotion.Prelude.List (Delete, Elem, Insert)
+import           Data.Singletons             (SingI)
+import qualified Data.Text                   as T
+import           Text.Printf                 (printf)
 
 import           Bio.Pipeline.NGS.BWA
 import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-import Data.Promotion.Prelude.List (Elem, Delete, All, Insert)
-import Data.Singletons (SingI)
-import Data.Promotion.Prelude.Eq ((:==$$))
-
-bwaAlign :: (FilePath, String)
+bwaAlign :: (tags1' ~ Delete 'Gzip tags1, tags2' ~ Delete 'Gzip tags2)
+         => (FilePath, String)
          -> FilePath
          -> BWAOptSetter
-         -> ATACSeq (MaybePair (File tags 'Fastq))
-         -> IO (ATACSeq (File (Delete 'Gzip tags) 'Bam))
-bwaAlign (dir, suffix) index opt = nameWith (dir++"/") suffix $ \output input ->
-    bwaAlign_ output index opt input
+         -> ATACSeq (MaybePair tags1 tags2 'Fastq)
+         -> IO (ATACSeq (EitherTag tags1' tags2' 'Bam))
+bwaAlign (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output input ->
+    bwaAlign_ output idx opt input
 
 filterBam :: ( SingI tags, Experiment experiment
              , tags' ~ (Insert 'Sorted tags) )
