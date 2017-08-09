@@ -13,15 +13,15 @@ module Bio.Pipeline.NGS.BWA
     , bwaReadTrim
     , bwaTmpDir
     , bwaMkIndex
-    , bwaAlign_
+    , bwaAlign1_
+    , bwaAlign2_
     ) where
 
 import           Bio.Data.Experiment
 import           Control.Lens                ((.~), (^.))
 import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
-import           Data.Promotion.Prelude.List (Delete, Insert)
-import           Data.Singletons             (SingI)
+import           Data.Promotion.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import           Shelly                      (cp, escaping, fromText, mkdir_p,
                                               run_, shelly, test_f)
@@ -65,6 +65,7 @@ bwaMkIndex input prefix = do
             run_ "bwa" ["index", "-p", T.pack prefix, "-a", "bwtsw", T.pack input]
     return prefix
 
+    {-
 -- | Tag alignment with BWA aligner.
 bwaAlign_ :: (tags1' ~ Delete 'Gzip tags1, tags2' ~ Delete 'Gzip tags2)
           => FilePath  -- ^ Output bam filename
@@ -73,17 +74,18 @@ bwaAlign_ :: (tags1' ~ Delete 'Gzip tags1, tags2' ~ Delete 'Gzip tags2)
           -> MaybePair tags1 tags2 'Fastq
           -> IO (EitherTag tags1' tags2' 'Bam)
 bwaAlign_ output index setter fileset = case fileset of
-    Left input             -> Left <$> _bwaAlign1 output index opt input
-    Right (input1, input2) -> Right <$> _bwaAlign2 output index opt input1 input2
+    Left input             -> Left <$> bwaAlign1_ output index opt input
+    Right (input1, input2) -> Right <$> bwaAlign2_ output index opt input1 input2
   where
     opt = execState setter defaultBWAOpts
+    -}
 
-_bwaAlign1 :: FilePath  -- ^ Path for the output bam file
+bwaAlign1_ :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
-           -> BWAOpts
+           -> BWAOptSetter
            -> File tags 'Fastq
            -> IO (File (Delete 'Gzip tags) 'Bam)
-_bwaAlign1 output index opt fastq = do
+bwaAlign1_ output index setter fastq = do
     stats <- withTempDirectory (opt^.bwaTmpDir) "bwa_align_tmp_dir." $
         \tmpdir -> shelly $ escaping False $ do
             let tmp_sai = T.pack $ tmpdir ++ "/tmp.sai"
@@ -101,21 +103,24 @@ _bwaAlign1 output index opt fastq = do
     return $ location .~ output $ emptyFile
   where
     input = T.pack $ fastq^.location
-{-# INLINE _bwaAlign1 #-}
+    opt = execState setter defaultBWAOpts
+{-# INLINE bwaAlign1_ #-}
 
-_bwaAlign2 :: FilePath  -- ^ Path for the output bam file
+bwaAlign2_ :: FilePath  -- ^ Path for the output bam file
            -> FilePath  -- ^ Genome index
-           -> BWAOpts
+           -> BWAOptSetter
            -> File tags 'Fastq
            -> File tags 'Fastq
            -> IO (File (Delete 'Gzip tags) 'Bam)
-_bwaAlign2 output index opt fastqF fastqR = do
-    let input1 = T.pack $ fastqF^.location
-        input2 = T.pack $ fastqR^.location
+bwaAlign2_ output index setter fastqF fastqR = do
     stats <- shelly $ escaping False $
         run_ "bwa" [ "mem", "-M", "-k", T.pack $ show $ opt^.bwaSeedLen
                    , "-t", T.pack $ show $ opt^.bwaCores, T.pack index
                    , input1, input2, "|"
                    , "samtools", "view", "-Su", "-", ">", T.pack $ output ]
     return $ location .~ output $ emptyFile
-{-# INLINE _bwaAlign2 #-}
+  where
+    opt = execState setter defaultBWAOpts
+    input1 = T.pack $ fastqF^.location
+    input2 = T.pack $ fastqR^.location
+{-# INLINE bwaAlign2_ #-}

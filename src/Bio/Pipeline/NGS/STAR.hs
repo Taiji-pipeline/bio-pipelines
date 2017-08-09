@@ -25,7 +25,7 @@ import           Shelly                   (fromText, mkdir_p, mv, run_, shelly,
                                            test_d)
 import           System.IO                (hPutStrLn, stderr)
 import           System.IO.Temp           (withTempDirectory)
-import Data.Promotion.Prelude.List (Delete, Insert)
+import Data.Promotion.Prelude.List (Delete)
 import Data.Singletons (SingI)
 
 data STAROpts = STAROpts

@@ -1,31 +1,32 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE OverloadedLists      #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Bio.Pipeline.NGS.Utils where
 
-import           Bio.Data.Bam             (bamToBed, readBam, runBam,
-                                           sortedBamToBedPE)
-import           Bio.Data.Bed             (BED, BED3 (..), BEDLike (..), toLine)
+import           Bio.Data.Bam                (bamToBed, readBam, runBam,
+                                              sortedBamToBedPE)
+import           Bio.Data.Bed                (BED, BED3 (..), BEDLike (..),
+                                              toLine)
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
-import qualified Data.ByteString as B
 import           Control.Monad.State.Lazy
-import           Data.Conduit.Zlib        (gzip, ungzip)
-import           Data.Maybe               (fromJust)
-import qualified Data.Text                as T
-import           Shelly                   (escaping, fromText, mv, run_, shelly,
-                                           silently)
-import           System.IO.Temp           (withTempDirectory)
-import Data.Promotion.Prelude.List
-import Data.Promotion.Prelude.Eq
-import Data.Singletons (SingI)
+import           Data.Conduit.Zlib           (gzip, ungzip)
+import           Data.Maybe                  (fromJust)
+import           Data.Promotion.Prelude.List
+import           Data.Singletons             (SingI)
+import qualified Data.Text                   as T
+import qualified Data.Text.IO                as T
+import           Shelly                      (escaping, fromText, mv, run_,
+                                              shelly, silently)
+import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
 filterBam_ :: (SingI tags, tags' ~ (Insert 'Sorted tags))
@@ -61,10 +62,10 @@ removeDuplicates_ :: SingI tags
                   => FilePath
                   -> FilePath
                   -> File tags 'Bam
-                  -> IO (File tags 'Bam, File '[] 'Other)
+                  -> IO (File tags 'Bam)
 removeDuplicates_ picardPath output input =
     withTempDirectory "./" "tmp_picard_dir." $ \tmp -> shelly $ do
-        let qcFile = output ++ ".picard.qc"
+        let qcFile = tmp ++ "/picard.qc"
             markdupTmp = tmp++"/dup_marked.bam"
             filtTmp = tmp++"/dup_filt.bam"
         -- Mark duplicates
@@ -81,16 +82,13 @@ removeDuplicates_ picardPath output input =
             , T.pack markdupTmp, ">", T.pack filtTmp ]
 
         -- Re-sort by names for pairedend sequencing
-        if isPair
+        if input `hasTag` Pairend
             then run_ "samtools" [ "sort", T.pack filtTmp, "-n", "-T"
                 , T.pack $ tmp ++ "/tmp_sort", "-o", T.pack output ]
             else mv (fromText $ T.pack filtTmp) $ fromText $ T.pack output
 
-        let finalBam = location .~ output $ emptyFile
-            dupQC = location .~ qcFile $ emptyFile
-        return (finalBam, dupQC)
-  where
-    isPair = input `hasTag` Pairend
+        qc <- liftIO $ T.readFile qcFile
+        return $ info .~ [("QC", qc)] $ location .~ output $ emptyFile
 
 bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function

@@ -15,7 +15,8 @@ module Bio.Pipeline.NGS
     , bwaReadTrim
     , defaultBWAOpts
     , bwaMkIndex
-    , bwaAlign
+    , bwaAlign1
+    , bwaAlign2
     , filterBam
     , removeDuplicates
     , bamToBed
@@ -51,14 +52,23 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-bwaAlign :: (tags1' ~ Delete 'Gzip tags1, tags2' ~ Delete 'Gzip tags2)
-         => (FilePath, String)
-         -> FilePath
-         -> BWAOptSetter
-         -> ATACSeq (MaybePair tags1 tags2 'Fastq)
-         -> IO (ATACSeq (EitherTag tags1' tags2' 'Bam))
-bwaAlign (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output input ->
-    bwaAlign_ output idx opt input
+bwaAlign1 :: tags' ~ Delete 'Gzip tags
+          => (FilePath, String)
+          -> FilePath
+          -> BWAOptSetter
+          -> ATACSeq (File tags 'Fastq)
+          -> IO (ATACSeq (File tags' 'Bam))
+bwaAlign1 (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output input ->
+    bwaAlign1_ output idx opt input
+
+bwaAlign2 :: (tags' ~ Delete 'Gzip tags, Elem 'Pairend tags ~ 'True)
+          => (FilePath, String)
+          -> FilePath
+          -> BWAOptSetter
+          -> ATACSeq (File tags 'Fastq, File tags 'Fastq)
+          -> IO (ATACSeq (File tags' 'Bam))
+bwaAlign2 (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output (fw, rv) ->
+    bwaAlign2_ output idx opt fw rv
 
 filterBam :: ( SingI tags, Experiment experiment
              , tags' ~ (Insert 'Sorted tags) )
@@ -71,7 +81,7 @@ removeDuplicates :: (Experiment experiment, SingI tags)
                  => FilePath   -- ^ picard
                  -> (FilePath, String)
                  -> experiment (File tags 'Bam)
-                 -> IO (experiment (File tags 'Bam, File '[] 'Other))
+                 -> IO (experiment (File tags 'Bam))
 removeDuplicates picard (dir, suffix) = nameWith (dir++"/") suffix
     (removeDuplicates_ picard)
 
