@@ -127,7 +127,7 @@ bam2BedPE_ output fn fl = do
 concatBed_ :: SingI tags
            => FilePath
            -> [File tags 'Bed]
-           -> IO (File '[Gzip] 'Bed)
+           -> IO (File (Insert 'Gzip tags) 'Bed)
 concatBed_ output fls = do
     runResourceT $ source =$= gzip $$ sinkFile output
     return $ location .~ output $ emptyFile

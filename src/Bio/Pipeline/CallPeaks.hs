@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -5,43 +6,49 @@
 {-# LANGUAGE OverloadedLists        #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TemplateHaskell        #-}
-{-# LANGUAGE DataKinds #-}
 
 module Bio.Pipeline.CallPeaks
     ( CallPeakOpts(..)
     , CallPeakOptSetter
+    , CallPeakMode(..)
     , Cutoff(..)
     , tmpDir
     , cutoff
     , gSize
-    , pair
+    , mode
+    , callSummits
     , defaultCallPeakOpts
     , callPeaks
     , idr
     , idrMultiple
     ) where
 
-import qualified Bio.Data.Bed as Bed
+import qualified Bio.Data.Bed             as Bed
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
 import           Control.Monad.State.Lazy
-import qualified Data.ByteString.Char8     as B
-import           Data.Conduit.Zlib         (ungzip)
-import           Data.Ord
-import qualified Data.Text                 as T
-import           Shelly                    (fromText, mv, run_, shelly)
-import           System.IO.Temp            (withTempDirectory)
-
+import qualified Data.ByteString.Char8    as B
+import           Data.Conduit.Zlib        (ungzip)
 import           Data.List
+import           Data.Ord
+import           Data.Singletons          (SingI)
+import qualified Data.Text                as T
+import           Shelly                   (fromText, mv, run_, shelly)
+import           System.IO.Temp           (withTempDirectory)
+
+data CallPeakMode = Model
+                  | NoModel Int Int   -- ^ implies "--nomodel --shift n --extsize m"
 
 type CallPeakOptSetter = State CallPeakOpts ()
 
 data CallPeakOpts = CallPeakOpts
-    { callPeakOptsTmpDir :: FilePath
-    , callPeakOptsCutoff :: Cutoff
-    , callPeakOptsGSize  :: String
-    , callPeakOptsPair   :: Bool
+    { callPeakOptsTmpDir      :: FilePath
+    , callPeakOptsCutoff      :: Cutoff
+    , callPeakOptsGSize       :: String
+    , callPeakOptsPair        :: Bool
+    , callPeakOptsMode        :: CallPeakMode
+    , callPeakOptsCallSummits :: Bool
     --, callPeakOptsBroad :: Bool
     --, callPeakOptsBroadCutoff :: Double
     }
@@ -56,17 +63,19 @@ defaultCallPeakOpts = CallPeakOpts
     { callPeakOptsTmpDir = "./"
     , callPeakOptsCutoff = QValue 0.01
     , callPeakOptsGSize = "mm"
-    , callPeakOptsPair  = False
+    , callPeakOptsMode  = Model
+    , callPeakOptsCallSummits = False
     --, callPeakOptsBroad = False
     --, callPeakOptsBroadCutoff = 0.05
     }
 
 -- | Call peaks using MACS2.
-callPeaks :: FilePath           -- ^ Ouptut file
-          -> File tags 'Bed    -- ^ Sample
-          -> Maybe (File tags 'Bed)      -- ^ Input/control sample
-          -> CallPeakOptSetter  -- ^ Options
-          -> IO (File tags 'NarrowPeak)
+callPeaks :: SingI tags
+          => FilePath                   -- ^ Ouptut file
+          -> File tags 'Bed             -- ^ Sample
+          -> Maybe (File tags 'Bed)    -- ^ Input/control sample
+          -> CallPeakOptSetter          -- ^ Options
+          -> IO (File '[] 'NarrowPeak)
 callPeaks output target input setter = do
     macs2 output (target^.location) (fmap (^.location) input)
         fileFormat opt
@@ -74,8 +83,8 @@ callPeaks output target input setter = do
     return $ location .~ output $ info .~ [("FRiP", T.pack $ show f)] $ emptyFile
   where
     opt = execState setter defaultCallPeakOpts
-    fileFormat | opt^.pair = "BEDPE"
-               | otherwise = "AUTO"
+    fileFormat | target `hasTag` Pairend = "BEDPE"
+               | otherwise = "BED"
 {-# INLINE callPeaks #-}
 
 macs2 :: FilePath        -- ^ Output
@@ -86,20 +95,27 @@ macs2 :: FilePath        -- ^ Output
       -> IO ()
 macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
     "tmp_macs2_dir." $ \tmp -> shelly $ do
-        run_ "macs2" $
-            [ "callpeak", "-f", T.pack fileformat, "-g", T.pack $ opt^.gSize
-            , "--outdir", T.pack tmp, "--tempdir", T.pack tmp, "--keep-dup"
-            , "all", "-t", T.pack target
-            ] ++ control ++ cut
+        run_ "macs2" $ [ "callpeak"
+            , "-f", T.pack fileformat
+            , "-g", T.pack $ opt^.gSize
+            , "--outdir", T.pack tmp
+            , "--tempdir", T.pack tmp
+            , "--keep-dup", "all"
+            , "-t", T.pack target ]
+            ++ ( case input of
+                    Nothing -> []
+                    Just x  -> ["-c", T.pack x] )
+            ++ (if opt^.callSummits then ["--call-summits"] else [])
+            ++ ( case opt^.cutoff of
+                    QValue x -> ["--qvalue", T.pack $ show x]
+                    PValue x -> ["--pvalue", T.pack $ show x] )
+            ++ ( case opt^.mode of
+                    Model -> []
+                    NoModel shift ext ->
+                        [ "--nomodel", "--shift", T.pack $ show shift
+                        , "--extsize", T.pack $ show ext ] )
         mv (fromText $ T.pack $ tmp ++ "/NA_peaks.narrowPeak") $ fromText $
             T.pack output
-  where
-    control = case input of
-        Nothing -> []
-        Just x -> ["-c", T.pack x]
-    cut = case opt^.cutoff of
-        QValue x -> ["--qvalue", T.pack $ show x]
-        PValue x -> ["--pvalue", T.pack $ show x]
 {-# INLINE macs2 #-}
 
 -- | Fraction of reads in peaks
@@ -143,7 +159,7 @@ idrMultiple peakFiles merged th output =
         return $ length $ B.lines c
     peakPair = comb peakFiles
     comb (x:xs) = zip (repeat x) xs ++ comb xs
-    comb _ = []
+    comb _      = []
 
 -- | Perform Irreproducible Discovery Rate (IDR) analysis
 idr :: File tags 'NarrowPeak  -- ^ Peak 1

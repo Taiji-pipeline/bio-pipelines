@@ -38,6 +38,8 @@ module Bio.Pipeline.NGS
     , rsemSeed
     , rsemMkIndex
     , rsemQuant
+
+    , nameWith
     ) where
 
 import           Bio.Data.Experiment
@@ -99,7 +101,7 @@ bamToBed (dir, suffix) = nameWith (dir ++ "/") suffix fn
 concatBed :: (SingI tags, Experiment experiment)
           => (FilePath, String)
           -> experiment (File tags 'Bed)
-          -> IO (experiment (File '[Gzip] 'Bed))
+          -> IO (experiment (File (Insert 'Gzip tags) 'Bed))
 concatBed (dir, suffix) e = do
     fl <- concatBed_ output fls
     return $ e & replicates .~ [ Replicate fl [] 0 ]

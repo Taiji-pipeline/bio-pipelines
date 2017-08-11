@@ -16,7 +16,7 @@ import           Data.CaseInsensitive  (CI, mk, original)
 import           Data.Hashable
 import qualified Data.Matrix.Unboxed   as MU
 import           Data.Maybe
-import           Data.Serialize        (Serialize(..))
+import           Data.Serialize        (Serialize (..))
 import qualified Data.Text             as T
 import           Data.Vector.Binary    ()
 import           Data.Vector.Serialize ()
