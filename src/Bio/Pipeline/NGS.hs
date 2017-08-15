@@ -1,10 +1,10 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE GADTs                #-}
-{-# LANGUAGE OverloadedLists      #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE TemplateHaskell      #-}
-{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Bio.Pipeline.NGS
     ( BWAOpts
@@ -44,6 +44,7 @@ module Bio.Pipeline.NGS
 
 import           Bio.Data.Experiment
 import           Control.Lens
+import           Data.Either                 (fromLeft, fromRight)
 import           Data.Promotion.Prelude.List (Delete, Elem, Insert)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
@@ -108,6 +109,43 @@ concatBed (dir, suffix) e = do
   where
     fls = e^..replicates.folded.files
     output = printf "%s/%s_rep0.%s" dir (T.unpack $ e^.eid) suffix
+
+starAlign :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
+             , tags1' ~ Delete 'Gzip tags1
+             , tags2' ~ Delete 'Gzip tags2 )
+          => (FilePath, String)
+          -> FilePath            -- ^ STAR genome index
+          -> STAROptSetter       -- ^ Options
+          -> Either (RNASeq (File tags1 'Fastq))
+                    (RNASeq (File tags2 'Fastq, File tags2 'Fastq))
+          -> IO ( Either (RNASeq (File tags1' 'Bam, File tags1' 'Bam))
+                         (RNASeq (File tags2' 'Bam, File tags2' 'Bam))
+                )
+starAlign (dir, suffix) idx setter experiment = case experiment of
+    Left e -> fmap Left $ e & replicates.traverse %%~ ( \r -> r & files %%~
+        (fmap (fromLeft undefined) . fun (e^.eid) (r^.number) . Left) )
+    Right e -> fmap Right $ e & replicates.traverse %%~ ( \r -> r & files %%~
+        (fmap (fromRight undefined) . fun (e^.eid) (r^.number) . Right) )
+  where
+    fun id' rep fl = starAlign_ outputGenome outputAnno idx setter fl
+      where
+        outputGenome = printf "%s/%s_rep%d_genome.%s" dir (T.unpack id')
+            rep suffix
+        outputAnno = printf "%s/%s_rep%d_anno.%s" dir (T.unpack id')
+            rep suffix
+
+rsemQuant :: SingI tags
+          => FilePath
+          -> FilePath
+          -> RSEMOptSetter
+          -> RNASeq (File tags 'Bam)
+          -> IO (RNASeq (File tags 'Tsv, File tags 'Tsv))
+rsemQuant dir idx setter e = e & replicates.traverse %%~
+    ( \r -> r & files %%~ fun (e^.eid) (r^.number) )
+  where
+    fun id' rep = rsemQuant_ outputPrefix idx setter
+      where
+        outputPrefix = printf "%s/%s_rep%d" dir (T.unpack id') rep
 
 nameWith :: (Experiment experiment, Monad m)
          => String   -- ^ Prefix

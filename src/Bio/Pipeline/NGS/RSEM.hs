@@ -8,7 +8,7 @@ module Bio.Pipeline.NGS.RSEM
     , rsemCores
     , rsemSeed
     , rsemMkIndex
-    , rsemQuant
+    , rsemQuant_
     ) where
 
 import           Bio.Data.Experiment
@@ -16,6 +16,7 @@ import           Control.Lens             ((.~), (^.))
 import           Control.Lens             (makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Int                 (Int32)
+import           Data.Singletons          (SingI)
 import qualified Data.Text                as T
 import           Shelly                   (fromText, mkdir_p, run_, shelly,
                                            test_d)
@@ -41,10 +42,9 @@ rsemMkIndex prefix anno fstqs = do
 
 
 data RSEMOpts = RSEMOpts
-    { _rsemPath    :: FilePath
-    , _rsemCores   :: Int
-    , _rsemSeed    :: Int32
-    , _rsemPairend :: Bool
+    { _rsemPath  :: FilePath
+    , _rsemCores :: Int
+    , _rsemSeed  :: Int32
     }
 
 makeLenses ''RSEMOpts
@@ -56,21 +56,21 @@ defaultRSEMOpts = RSEMOpts
     { _rsemPath = ""
     , _rsemCores = 1
     , _rsemSeed = 12345
-    , _rsemPairend = False
     }
 
 -- | Gene and transcript quantification using rsem
-rsemQuant :: FilePath         -- ^ Prefix
-          -> FilePath         -- ^ Directory containing the index
-          -> RSEMOptSetter
-          -> File tags 'Bam
-          -> IO (File tags 'Tsv, File tags 'Tsv)
-rsemQuant outputPrefix indexPrefix setter input = shelly $ do
+rsemQuant_ :: SingI tags
+           => FilePath         -- ^ output prefix
+           -> FilePath         -- ^ Directory containing the index
+           -> RSEMOptSetter
+           -> File tags 'Bam
+           -> IO (File tags 'Tsv, File tags 'Tsv)
+rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
     run_ rsem $ [ "--bam", "--estimate-rspd", "--calc-ci"
         , "--seed", T.pack $ show $ opt^.rsemSeed
         , "-p", T.pack $ show $ opt^.rsemCores
         , "--no-bam-output", "--ci-memory", "30000" ] ++
-        ( if opt^.rsemPairend
+        ( if input `hasTag` Pairend
             then ["--paired-end", "--forward-prob", "0"]
             else [] ) ++
         [T.pack $ input^.location, T.pack indexPrefix, T.pack outputPrefix]

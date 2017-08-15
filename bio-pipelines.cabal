@@ -26,6 +26,8 @@ library
     Bio.Pipeline.NGS.Utils
     Bio.Pipeline.Utils
     Bio.Pipeline.Instances
+    Bio.Pipeline.Download
+    Bio.Pipeline.Report
 
   build-depends:
       base >=4.0 && <5.0
@@ -41,6 +43,8 @@ library
     , data-default
     , filepath
     , hashable
+    , http-conduit
+    , HsHTSLib
     , lens
     , mtl
     , matrices >=0.4.4
