@@ -139,7 +139,7 @@ rsemQuant :: SingI tags
           -> FilePath
           -> RSEMOptSetter
           -> RNASeq (File tags 'Bam)
-          -> IO (RNASeq (File tags 'Tsv, File tags 'Tsv))
+          -> IO (RNASeq (File '[GeneQuant] 'Tsv, File '[TranscriptQuant] 'Tsv))
 rsemQuant dir idx setter e = e & replicates.traverse %%~
     ( \r -> r & files %%~ fun (e^.eid) (r^.number) )
   where

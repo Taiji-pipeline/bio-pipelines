@@ -64,7 +64,7 @@ rsemQuant_ :: SingI tags
            -> FilePath         -- ^ Directory containing the index
            -> RSEMOptSetter
            -> File tags 'Bam
-           -> IO (File tags 'Tsv, File tags 'Tsv)
+           -> IO (File '[GeneQuant] 'Tsv, File '[TranscriptQuant] 'Tsv)
 rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
     run_ rsem $ [ "--bam", "--estimate-rspd", "--calc-ci"
         , "--seed", T.pack $ show $ opt^.rsemSeed
@@ -76,8 +76,8 @@ rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
         [T.pack $ input^.location, T.pack indexPrefix, T.pack outputPrefix]
 
     let geneQuant = location .~ outputPrefix ++ ".genes.results" $ emptyFile
-        transcirptQuant = location .~ outputPrefix ++ ".isoforms.results" $ emptyFile
-    return (geneQuant, transcirptQuant)
+        transcriptQuant = location .~ outputPrefix ++ ".isoforms.results" $ emptyFile
+    return (geneQuant, transcriptQuant)
   where
     rsem = fromText $ T.pack $ opt^.rsemPath ++ "rsem-calculate-expression"
     opt = execState setter defaultRSEMOpts
