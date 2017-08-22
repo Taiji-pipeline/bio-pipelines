@@ -33,6 +33,10 @@ instance ToJSON B.ByteString where
 instance FromJSON (CI B.ByteString) where
     parseJSON = fmap mk . parseJSON
 
+instance ToJSONKey (CI B.ByteString)
+
+instance FromJSONKey (CI B.ByteString)
+
 instance ToJSON (CI B.ByteString) where
     toJSON = toJSON . original
 
