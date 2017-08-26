@@ -46,7 +46,6 @@ data CallPeakOpts = CallPeakOpts
     { callPeakOptsTmpDir      :: FilePath
     , callPeakOptsCutoff      :: Cutoff
     , callPeakOptsGSize       :: String
-    , callPeakOptsPair        :: Bool
     , callPeakOptsMode        :: CallPeakMode
     , callPeakOptsCallSummits :: Bool
     --, callPeakOptsBroad :: Bool

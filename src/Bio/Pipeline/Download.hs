@@ -19,7 +19,9 @@ import           Shelly                hiding (FilePath)
 sraToFastq :: SingI tags
            => FilePath
            -> File tags 'SRA
-           -> IO (MaybePair '[Gzip] '[Gzip] 'Fastq)
+           -> IO (Either (File '[Gzip] 'Fastq)
+                         (File '[Gzip] 'Fastq, File '[Gzip] 'Fastq)
+                 )
 sraToFastq outDir input = if input `hasTag` Pairend
     then Right <$> fastqDumpPair input
     else Left <$> fastqDump input
