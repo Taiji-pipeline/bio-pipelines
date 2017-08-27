@@ -24,7 +24,7 @@ import           Control.Monad.State.Lazy
 import           Data.Promotion.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import           Shelly                      (cp, escaping, fromText, mkdir_p,
-                                              run_, shelly, test_f)
+                                              run_, shelly, test_f, touchfile)
 import           System.FilePath             (takeDirectory)
 import           System.IO                   (hPutStrLn, stderr)
 import           System.IO.Temp              (withTempDirectory)
@@ -55,15 +55,19 @@ bwaMkIndex :: FilePath
            -> FilePath   -- ^ Index prefix, e.g., /path/genome.fa
            -> IO FilePath
 bwaMkIndex input prefix = do
-    fileExist <- shelly $ test_f (fromText $ T.pack prefix)
+    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
     if fileExist
         then hPutStrLn stderr "BWA index exists. Skipped."
         else shelly $ do
-            mkdir_p $ fromText $ T.pack $ takeDirectory prefix
+            mkdir_p $ fromText $ T.pack dir
             cp (fromText $ T.pack input) $ fromText $ T.pack prefix
             liftIO $ hPutStrLn stderr "Generating BWA index"
             run_ "bwa" ["index", "-p", T.pack prefix, "-a", "bwtsw", T.pack input]
+            touchfile $ fromText $ T.pack $ dir ++ stamp
     return prefix
+  where
+    dir = takeDirectory prefix
+    stamp = "/.bio_pipelines_bwa_index"
 
     {-
 -- | Tag alignment with BWA aligner.
