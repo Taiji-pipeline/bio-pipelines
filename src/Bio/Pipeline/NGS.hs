@@ -11,12 +11,9 @@ module Bio.Pipeline.NGS
     , BWAOptSetter
     , bwaCores
     , bwaSeedLen
-    , bwaMaxMis
-    , bwaReadTrim
     , defaultBWAOpts
     , bwaMkIndex
-    , bwaAlign1
-    , bwaAlign2
+    , bwaAlign
     , filterBam
     , removeDuplicates
     , bamToBed
@@ -45,6 +42,7 @@ module Bio.Pipeline.NGS
 import           Bio.Data.Experiment
 import           Control.Lens
 import           Data.Either                 (fromLeft, fromRight)
+import Data.Bitraversable (bitraverse)
 import           Data.Promotion.Prelude.List (Delete, Elem, Insert)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
@@ -55,23 +53,22 @@ import           Bio.Pipeline.NGS.RSEM
 import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
-bwaAlign1 :: tags' ~ Delete 'Gzip tags
-          => (FilePath, String)
-          -> FilePath
-          -> BWAOptSetter
-          -> ATACSeq (File tags 'Fastq)
-          -> IO (ATACSeq (File tags' 'Bam))
-bwaAlign1 (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output input ->
-    bwaAlign1_ output idx opt input
-
-bwaAlign2 :: (tags' ~ Delete 'Gzip tags, Elem 'Pairend tags ~ 'True)
-          => (FilePath, String)
-          -> FilePath
-          -> BWAOptSetter
-          -> ATACSeq (File tags 'Fastq, File tags 'Fastq)
-          -> IO (ATACSeq (File tags' 'Bam))
-bwaAlign2 (dir, suffix) idx opt = nameWith (dir++"/") suffix $ \output (fw, rv) ->
-    bwaAlign2_ output idx opt fw rv
+bwaAlign :: ( tags1' ~ Delete 'Gzip tags1
+            , tags2' ~ Delete 'Gzip tags2
+            , Elem 'Pairend tags2 ~ 'True )
+         => (FilePath, String)
+         -> FilePath
+         -> BWAOptSetter
+         -> Either (ATACSeq (File tags1 'Fastq))
+                   (ATACSeq (File tags2 'Fastq, File tags2 'Fastq))
+         -> IO ( Either (ATACSeq (File tags1' 'Bam))
+                        (ATACSeq (File tags2' 'Bam)) )
+bwaAlign (dir, suffix) idx opt = bitraverse fun1 fun2
+  where
+    fun1 = nameWith (dir++"/") suffix $ \output input ->
+        bwaAlign_ output idx opt $ Left input
+    fun2 = nameWith (dir++"/") suffix $ \output input ->
+        bwaAlign_ output idx opt $ Right input
 
 filterBam :: ( SingI tags, Experiment experiment
              , tags' ~ (Insert 'Sorted tags) )
@@ -108,7 +105,7 @@ concatBed (dir, suffix) e = do
     return $ e & replicates .~ [ Replicate fl [] 0 ]
   where
     fls = e^..replicates.folded.files
-    output = printf "%s/%s_rep0.%s" dir (T.unpack $ e^.eid) suffix
+    output = printf "%s/%s_rep0%s" dir (T.unpack $ e^.eid) suffix
 
 starAlign :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
              , tags1' ~ Delete 'Gzip tags1
@@ -119,20 +116,15 @@ starAlign :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
           -> Either (RNASeq (File tags1 'Fastq))
                     (RNASeq (File tags2 'Fastq, File tags2 'Fastq))
           -> IO ( Either (RNASeq (File tags1' 'Bam, File tags1' 'Bam))
-                         (RNASeq (File tags2' 'Bam, File tags2' 'Bam))
-                )
-starAlign (dir, suffix) idx setter experiment = case experiment of
-    Left e -> fmap Left $ e & replicates.traverse %%~ ( \r -> r & files %%~
-        (fmap (fromLeft undefined) . fun (e^.eid) (r^.number) . Left) )
-    Right e -> fmap Right $ e & replicates.traverse %%~ ( \r -> r & files %%~
-        (fmap (fromRight undefined) . fun (e^.eid) (r^.number) . Right) )
+                         (RNASeq (File tags2' 'Bam, File tags2' 'Bam)) )
+starAlign (dir, suffix) idx setter = bitraverse fun1 fun2
   where
-    fun id' rep fl = starAlign_ outputGenome outputAnno idx setter fl
-      where
-        outputGenome = printf "%s/%s_rep%d_genome.%s" dir (T.unpack id')
-            rep suffix
-        outputAnno = printf "%s/%s_rep%d_anno.%s" dir (T.unpack id')
-            rep suffix
+    fun1 = nameWith (dir++"/") "" $ \output input -> starAlign_
+        (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
+        idx setter $ Left input
+    fun2 = nameWith (dir++"/") "" $ \output input -> starAlign_
+        (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
+        idx setter $ Right input
 
 rsemQuant :: SingI tags
           => FilePath
@@ -157,6 +149,6 @@ nameWith prefix suffix fn e = e & replicates.traverse %%~ (\r -> r & files %%~ f
   where
     f r fl = fn output fl
       where
-        output = printf "%s%s_rep%d.%s" prefix (T.unpack $ e^.eid)
+        output = printf "%s%s_rep%d%s" prefix (T.unpack $ e^.eid)
             (r^.number) suffix
 {-# INLINE nameWith #-}

@@ -9,13 +9,17 @@ module Bio.Pipeline.Utils
     ) where
 
 import           Control.Monad.IO.Class
-import           Data.Aeson (ToJSON(..), FromJSON(..))
+import           Data.Aeson             (FromJSON (..), ToJSON (..))
 import           Data.Serialize         (Serialize (..))
 import qualified Data.Text              as T
 import           GHC.Generics           (Generic)
 import           Shelly                 (fromText, mkdir_p, shelly)
 
 newtype Directory = Directory FilePath deriving (Show, Read, Ord, Eq, Generic)
+
+instance Monoid Directory where
+    mempty = Directory ""
+    mappend (Directory x) (Directory y) = Directory (x ++ y)
 
 instance ToJSON Directory where
     toEncoding (Directory fl) = toEncoding fl

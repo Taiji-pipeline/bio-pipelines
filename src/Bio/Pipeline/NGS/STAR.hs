@@ -21,7 +21,7 @@ import           Control.Lens                ((.~), (^.))
 import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Either                 (isRight)
-import           Data.Promotion.Prelude.List (Delete, Elem)
+import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Shelly                      (fromText, mkdir_p, mv, run_,
@@ -72,17 +72,14 @@ starMkIndex star dir fstqs anno r = do
     return dir
 
 -- | Align RNA-seq raw reads with STAR
-starAlign_ :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
-              , tags1' ~ Delete 'Gzip tags1
-              , tags2' ~ Delete 'Gzip tags2 )
+starAlign_ :: (SingI tags, tags' ~ Delete 'Gzip tags)
            => FilePath                    -- ^ Genome alignment result
            -> FilePath                    -- ^ Annotation alignment result
            -> FilePath                    -- ^ STAR genome index
            -> STAROptSetter               -- ^ Options
-           -> Either (File tags1 'Fastq)
-                     (File tags2 'Fastq, File tags2 'Fastq)
-           -> IO ( Either (File tags1' 'Bam, File tags1' 'Bam)
-                          (File tags2' 'Bam, File tags2' 'Bam) )
+           -> Either (File tags 'Fastq)
+                     (File tags 'Fastq, File tags 'Fastq)
+           -> IO (File tags' 'Bam, File tags' 'Bam)
 starAlign_ outputGenome outputAnno index setter dat = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
         run_ star $ ["--genomeDir", T.pack index, "--readFilesIn"] ++
@@ -126,11 +123,8 @@ starAlign_ outputGenome outputAnno index setter dat = withTempDirectory
                     "/Aligned.toTranscriptome.out.bam") $ fromText $
                     T.pack outputAnno
 
-        return $ if isRight dat
-            then Right ( location .~ outputGenome $ emptyFile
-                       , location .~ outputAnno $ emptyFile )
-            else Left ( location .~ outputGenome $ emptyFile
-                      , location .~ outputAnno $ emptyFile )
+        return ( location .~ outputGenome $ emptyFile
+               , location .~ outputAnno $ emptyFile )
   where
     star = fromText $ T.pack $ opt^.starCmd
     (inputs, zipped) = case dat of
