@@ -20,7 +20,7 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
 import           Data.Maybe                  (fromJust)
-import           Data.Promotion.Prelude.List
+import           Data.Promotion.Prelude.List (Elem)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
@@ -29,7 +29,7 @@ import           Shelly                      (escaping, fromText, mv, run_,
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
-filterBam_ :: (SingI tags, tags' ~ (Insert 'Sorted tags))
+filterBam_ :: (SingI tags, tags' ~ (Insert' 'Sorted tags))
            => FilePath  -- ^ output
            -> File tags 'Bam
            -> IO (File tags' 'Bam)
@@ -92,7 +92,7 @@ removeDuplicates_ picardPath output input =
 
 bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function
-         -> File tags 'Bam -> IO (File (Insert 'Gzip tags) 'Bed)
+         -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2Bed_ output fn fl = do
     runBam $ readBam (fl^.location) =$= bamToBed =$= filterC fn =$=
         mapC toLine =$= unlinesAsciiC =$= gzip $$ sinkFileBS output
@@ -104,7 +104,7 @@ bam2BedPE_ :: Elem 'Sorted tags ~ 'True
            => String
            -> ((BED, BED) -> Bool)
            -> File tags 'Bam
-           -> IO (File (Insert 'Gzip tags) 'Bed)
+           -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2BedPE_ output fn fl = do
     runBam $ readBam (fl^.location) =$= sortedBamToBedPE =$=
         filterC fn =$= concatMapC f =$= mapC toLine =$= unlinesAsciiC =$=
@@ -127,7 +127,7 @@ bam2BedPE_ output fn fl = do
 concatBed_ :: SingI tags
            => FilePath
            -> [File tags 'Bed]
-           -> IO (File (Insert 'Gzip tags) 'Bed)
+           -> IO (File (Insert' 'Gzip tags) 'Bed)
 concatBed_ output fls = do
     runResourceT $ source =$= gzip $$ sinkFile output
     return $ location .~ output $ emptyFile

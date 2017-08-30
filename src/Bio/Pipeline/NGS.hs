@@ -42,7 +42,7 @@ module Bio.Pipeline.NGS
 import           Bio.Data.Experiment
 import           Control.Lens
 import           Data.Bitraversable          (bitraverse)
-import           Data.Promotion.Prelude.List (Delete, Elem, Insert)
+import           Data.Promotion.Prelude.List (Delete, Elem)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Text.Printf                 (printf)
@@ -70,7 +70,7 @@ bwaAlign (dir, suffix) idx opt = bitraverse fun1 fun2
         bwaAlign_ output idx opt . Right
 
 filterBam :: ( SingI tags, Experiment experiment
-             , tags' ~ (Insert 'Sorted tags) )
+             , tags' ~ (Insert' 'Sorted tags) )
           => (FilePath, String)
           -> experiment S (File tags 'Bam)
           -> IO (experiment S (File tags' 'Bam))
@@ -88,7 +88,7 @@ bamToBed :: ( Experiment experiment, SingI tags
             , Elem 'Sorted tags ~ 'True )
          => (FilePath, String)
          -> experiment S (File tags 'Bam)
-         -> IO (experiment S (File (Insert 'Gzip tags) 'Bed))
+         -> IO (experiment S (File (Insert' 'Gzip tags) 'Bed))
 bamToBed (dir, suffix) = mapFileWithDefName (dir ++ "/") suffix $ \output fl ->
     if fl `hasTag` Pairend
         then bam2Bed_ output (const True) fl
@@ -97,7 +97,7 @@ bamToBed (dir, suffix) = mapFileWithDefName (dir ++ "/") suffix $ \output fl ->
 concatBed :: (SingI tags, Experiment experiment)
           => (FilePath, String)
           -> experiment N (File tags 'Bed)
-          -> IO (experiment S (File (Insert 'Gzip tags) 'Bed))
+          -> IO (experiment S (File (Insert' 'Gzip tags) 'Bed))
 concatBed (dir, suffix) e = do
     fl <- concatBed_ output fls
     return $ e & replicates .~ return (Replicate fl [] 0)
