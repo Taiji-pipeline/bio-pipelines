@@ -19,23 +19,25 @@ module Bio.Pipeline.CallPeaks
     , callSummits
     , defaultCallPeakOpts
     , callPeaks
+    , frip
     , idr
     , idrMultiple
     ) where
 
-import qualified Bio.Data.Bed             as Bed
+import qualified Bio.Data.Bed               as Bed
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
-import           Control.Monad.State.Lazy
-import qualified Data.ByteString.Char8    as B
-import           Data.Conduit.Zlib        (ungzip)
+import           Control.Monad.State.Strict (State, execState, execStateT, get,
+                                             put, forM)
+import qualified Data.ByteString.Char8      as B
+import           Data.Conduit.Zlib          (ungzip)
 import           Data.List
 import           Data.Ord
-import           Data.Singletons          (SingI)
-import qualified Data.Text                as T
-import           Shelly                   (fromText, mv, run_, shelly)
-import           System.IO.Temp           (withTempDirectory)
+import           Data.Singletons            (SingI)
+import qualified Data.Text                  as T
+import           Shelly                     (fromText, mv, run_, shelly)
+import           System.IO.Temp             (withTempDirectory)
 
 data CallPeakMode = Model
                   | NoModel Int Int   -- ^ implies "--nomodel --shift n --extsize m"
@@ -78,13 +80,11 @@ callPeaks :: SingI tags
 callPeaks output target input setter = do
     macs2 output (target^.location) (fmap (^.location) input)
         fileFormat opt
-    f <- frip (target^.location) output
-    return $ location .~ output $ info .~ [("FRiP", T.pack $ show f)] $ emptyFile
+    return $ location .~ output $ emptyFile
   where
     opt = execState setter defaultCallPeakOpts
     fileFormat | target `hasTag` Pairend = "BEDPE"
                | otherwise = "BED"
-{-# INLINE callPeaks #-}
 
 macs2 :: FilePath        -- ^ Output
       -> FilePath        -- ^ Target
@@ -118,24 +118,29 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
 {-# INLINE macs2 #-}
 
 -- | Fraction of reads in peaks
-frip :: FilePath   -- ^ reads, in BedGzip format
-     -> FilePath   -- ^ peaks, in bed format
+frip :: SingI tags1
+     => File tags1 'Bed        -- ^ reads
+     -> File tags2 'NarrowPeak -- ^ peaks
      -> IO Double
-frip rs peaks = do
-    p <- Bed.readBed' peaks :: IO [Bed.BED3]
+frip rs peak = do
+    p <- Bed.readBed' $ peak^.location :: IO [Bed.BED3]
     (n, m) <- flip execStateT (0::Int, 0::Int) $ runResourceT $
-        sourceFileBS rs =$= ungzip =$= linesUnboundedAsciiC =$=
-        mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) =$= total =$=
+        sourceFileBS (rs^.location) =$=
+        (if rs `hasTag` Gzip then ungzip else mapC id) =$=
+        linesUnboundedAsciiC =$=
+        mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) =$= getTotalReads =$=
         Bed.intersectBed p $$ count
     return $ fromIntegral m / fromIntegral n
   where
-    total = awaitForever $ \i -> do
-        (c, x) <- get
-        put (c+1,x)
+    getTotalReads = awaitForever $ \i -> do
+        (acc, x) <- get
+        let acc' = acc + 1
+        put $ acc' `seq` (acc', x)
         yield i
     count = awaitForever $ \_ -> do
-        (x, c) <- get
-        put (x, c+1)
+        (x, acc) <- get
+        let acc' = acc + 1
+        put $ acc' `seq` (x, acc')
 
 idrMultiple :: [File tags 'NarrowPeak]   -- ^ Peaks
             -> File tags 'NarrowPeak  -- ^ Merged peaks

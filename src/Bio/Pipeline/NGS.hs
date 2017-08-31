@@ -94,10 +94,12 @@ bamToBed (dir, suffix) = mapFileWithDefName (dir ++ "/") suffix $ \output fl ->
         then bam2Bed_ output (const True) fl
         else bam2BedPE_ output (const True) fl
 
-concatBed :: (SingI tags, Experiment experiment)
+concatBed :: ( Experiment experiment
+             , Elem 'Gzip tags1 ~ 'False
+             , Elem 'Gzip tags2 ~ 'True )
           => (FilePath, String)
-          -> experiment N (File tags 'Bed)
-          -> IO (experiment S (File (Insert' 'Gzip tags) 'Bed))
+          -> experiment N (Either (File tags1 'Bed) (File tags2 'Bed))
+          -> IO (experiment S (File '[Gzip] 'Bed))
 concatBed (dir, suffix) e = do
     fl <- concatBed_ output fls
     return $ e & replicates .~ return (Replicate fl [] 0)

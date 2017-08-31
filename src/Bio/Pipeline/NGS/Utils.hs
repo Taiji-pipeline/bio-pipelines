@@ -124,15 +124,15 @@ bam2BedPE_ output fn fl = do
 {-# INLINE bam2BedPE_ #-}
 
 -- | Merge multiple BED files.
-concatBed_ :: SingI tags
+concatBed_ :: (Elem 'Gzip tags1 ~ 'False, Elem 'Gzip tags2 ~ 'True)
            => FilePath
-           -> [File tags 'Bed]
-           -> IO (File (Insert' 'Gzip tags) 'Bed)
+           -> [Either (File tags1 'Bed) (File tags2 'Bed)]
+           -> IO (File '[Gzip] 'Bed)
 concatBed_ output fls = do
     runResourceT $ source =$= gzip $$ sinkFile output
     return $ location .~ output $ emptyFile
   where
-    source = forM_ fls $ \fl -> if fl `hasTag` Gzip
-        then sourceFileBS (fl^.location) =$= ungzip
-        else sourceFileBS (fl^.location)
+    source = forM_ fls $ \fl -> case fl of
+        Left fl' -> sourceFileBS (fl'^.location)
+        Right fl' -> sourceFileBS (fl'^.location) =$= ungzip
 {-# INLINE concatBed_ #-}
