@@ -25,7 +25,7 @@ import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Shelly                      (fromText, mkdir_p, mv, run_,
-                                              shelly, test_d)
+                                              shelly, test_f, touchfile)
 import           System.IO                   (hPutStrLn, stderr)
 import           System.IO.Temp              (withTempDirectory)
 
@@ -59,8 +59,8 @@ starMkIndex :: FilePath   -- ^ STAR command path
                           -- to "ReadLength-1" or 100 for general purpose.
             -> IO FilePath
 starMkIndex star dir fstqs anno r = do
-    dirExist <- shelly $ test_d $ fromText $ T.pack dir
-    if dirExist
+    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
+    if fileExist
         then hPutStrLn stderr "STAR index directory exists. Skipped."
         else shelly $ do
             mkdir_p $ fromText $ T.pack dir
@@ -69,7 +69,10 @@ starMkIndex star dir fstqs anno r = do
                 [ "--runThreadN", "1", "--runMode", "genomeGenerate", "--genomeDir"
                 , T.pack dir, "--genomeFastaFiles" ] ++ map T.pack fstqs ++
                 ["--sjdbGTFfile", T.pack anno, "--sjdbOverhang", T.pack $ show r]
+            touchfile $ fromText $ T.pack $ dir ++ stamp
     return dir
+  where
+    stamp = "/.bio_pipelines_star_index"
 
 -- | Align RNA-seq raw reads with STAR
 starAlign_ :: (SingI tags, tags' ~ Delete 'Gzip tags)

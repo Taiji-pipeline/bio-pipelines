@@ -19,7 +19,7 @@ import           Data.Int                 (Int32)
 import           Data.Singletons          (SingI)
 import qualified Data.Text                as T
 import           Shelly                   (fromText, mkdir_p, run_, shelly,
-                                           test_d)
+                                           test_f, touchfile)
 import           System.FilePath          (takeDirectory)
 import           System.IO                (hPutStrLn, stderr)
 
@@ -28,18 +28,19 @@ rsemMkIndex :: FilePath   -- ^ Prefix
             -> [FilePath] -- ^ fastq files
             -> IO FilePath
 rsemMkIndex prefix anno fstqs = do
-    dirExist <- shelly $ test_d $ fromText $ T.pack dir
-    if dirExist
+    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
+    if fileExist
         then hPutStrLn stderr "RSEM index directory exists. Skipped."
         else shelly $ do
             mkdir_p $ fromText $ T.pack dir
             liftIO $ hPutStrLn stderr "Generating RSEM indices"
             run_ "rsem-prepare-reference" [ "--gtf", T.pack anno
                 , T.intercalate "," $ map T.pack fstqs, T.pack prefix ]
+            touchfile $ fromText $ T.pack $ dir ++ stamp
     return prefix
   where
     dir = takeDirectory prefix
-
+    stamp = "/.bio_pipelines_rsem_index"
 
 data RSEMOpts = RSEMOpts
     { _rsemPath  :: FilePath
