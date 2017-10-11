@@ -9,7 +9,6 @@
 
 module Bio.Pipeline.CallPeaks
     ( CallPeakOpts(..)
-    , CallPeakOptSetter
     , CallPeakMode(..)
     , Cutoff(..)
     , tmpDir
@@ -17,7 +16,6 @@ module Bio.Pipeline.CallPeaks
     , gSize
     , mode
     , callSummits
-    , defaultCallPeakOpts
     , callPeaks
     , frip
     , idr
@@ -28,10 +26,10 @@ import qualified Bio.Data.Bed               as Bed
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
-import           Control.Monad.State.Strict (State, execState, execStateT, get,
-                                             put, forM)
+import           Control.Monad.State.Strict (execStateT, forM, get, put)
 import qualified Data.ByteString.Char8      as B
 import           Data.Conduit.Zlib          (ungzip)
+import           Data.Default               (Default (..))
 import           Data.List
 import           Data.Ord
 import           Data.Singletons            (SingI)
@@ -41,8 +39,6 @@ import           System.IO.Temp             (withTempDirectory)
 
 data CallPeakMode = Model
                   | NoModel Int Int   -- ^ implies "--nomodel --shift n --extsize m"
-
-type CallPeakOptSetter = State CallPeakOpts ()
 
 data CallPeakOpts = CallPeakOpts
     { callPeakOptsTmpDir      :: FilePath
@@ -59,30 +55,29 @@ data Cutoff = PValue Double
 
 makeFields ''CallPeakOpts
 
-defaultCallPeakOpts :: CallPeakOpts
-defaultCallPeakOpts = CallPeakOpts
-    { callPeakOptsTmpDir = "./"
-    , callPeakOptsCutoff = QValue 0.01
-    , callPeakOptsGSize = "mm"
-    , callPeakOptsMode  = Model
-    , callPeakOptsCallSummits = False
-    --, callPeakOptsBroad = False
-    --, callPeakOptsBroadCutoff = 0.05
-    }
+instance Default CallPeakOpts where
+    def = CallPeakOpts
+        { callPeakOptsTmpDir = "./"
+        , callPeakOptsCutoff = QValue 0.01
+        , callPeakOptsGSize = "mm"
+        , callPeakOptsMode  = Model
+        , callPeakOptsCallSummits = False
+        --, callPeakOptsBroad = False
+        --, callPeakOptsBroadCutoff = 0.05
+        }
 
 -- | Call peaks using MACS2.
 callPeaks :: SingI tags
-          => FilePath                   -- ^ Ouptut file
-          -> File tags 'Bed             -- ^ Sample
+          => FilePath                  -- ^ Ouptut file
+          -> File tags 'Bed            -- ^ Sample
           -> Maybe (File tags 'Bed)    -- ^ Input/control sample
-          -> CallPeakOptSetter          -- ^ Options
+          -> CallPeakOpts              -- ^ Options
           -> IO (File '[] 'NarrowPeak)
-callPeaks output target input setter = do
+callPeaks output target input opt = do
     macs2 output (target^.location) (fmap (^.location) input)
         fileFormat opt
     return $ location .~ output $ emptyFile
   where
-    opt = execState setter defaultCallPeakOpts
     fileFormat | target `hasTag` Pairend = "BEDPE"
                | otherwise = "BED"
 
