@@ -46,6 +46,7 @@ import           Data.Promotion.Prelude.List (Delete, Elem)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Text.Printf                 (printf)
+import           Data.Coerce                   (coerce)
 
 import           Bio.Pipeline.NGS.BWA
 import           Bio.Pipeline.NGS.RSEM
@@ -107,9 +108,9 @@ concatBed (dir, suffix) e = do
     fls = e^..replicates.folded.files
     output = printf "%s/%s_rep0%s" dir (T.unpack $ e^.eid) suffix
 
-starAlign :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
+starAlign :: ( SingI tags1, SingI tags2
              , tags1' ~ Delete 'Gzip tags1
-             , tags2' ~ Delete 'Gzip tags2 )
+             , tags2' ~ Insert' 'Pairend (Delete 'Gzip tags2) )
           => (FilePath, String)
           -> FilePath            -- ^ STAR genome index
           -> STAROptSetter       -- ^ Options
@@ -119,12 +120,13 @@ starAlign :: ( SingI tags1, SingI tags2, Elem 'Pairend tags2 ~ 'True
                          (RNASeq S (File tags2' 'Bam, File tags2' 'Bam)) )
 starAlign (dir, suffix) idx setter = bitraverse fun1 fun2
   where
-    fun1 = mapFileWithDefName (dir++"/") "" $ \output -> starAlign_
+    fun1 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
         (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
         idx setter . Left
-    fun2 = mapFileWithDefName (dir++"/") "" $ \output -> starAlign_
+    fun2 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
         (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
         idx setter . Right
+    f (a,b) = (coerce a, coerce b)
 
 rsemQuant :: SingI tags
           => FilePath
