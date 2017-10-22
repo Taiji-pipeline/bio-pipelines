@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
 module Bio.Pipeline.Download (downloadFiles) where
 
 import           Bio.Data.Experiment
@@ -12,10 +14,10 @@ import           Control.Lens
 import           Control.Monad
 import qualified Data.ByteString.Char8      as B
 import           Data.Coerce                (coerce)
+import           Data.List                  (nub)
 import           Data.List.Split            (splitOn)
 import           Data.Maybe
-import           Data.Singletons            (SingI, SomeSing (..), toSing,
-                                             withSingI)
+import           Data.Singletons
 import qualified Data.Text                  as T
 import           Network.HTTP.Conduit
 import           Shelly                     hiding (FilePath)
@@ -88,15 +90,21 @@ downloadFiles outDir (Right (SomeFile f1, SomeFile f2))
 downloadENCODE :: FilePath
                -> SomeFile
                -> IO SomeFile
-downloadENCODE outDir (SomeFile (fl :: File tags filetype)) = do
+downloadENCODE outDir (SomeFile (fl :: File filetag filetype)) = do
+    let tags = fromSing (sing :: Sing filetag)
     f_name <- downloadENCODE' (fl^.location) outDir
     let newFile = location .~ f_name $ fl
+        ft = guessFormat f_name
     return $ if getFileType fl == Other
-        then let ft = guessFormat f_name
-             in case toSing ft of
-                 SomeSing (ft' :: SFileType ft) -> withSingI ft' $ SomeFile
-                     (coerce newFile :: File tags ft)
+        then case toSing ft of
+                 SomeSing (ft' :: SFileType ft) -> withSingI ft' $ if gzipped f_name
+                     then case toSing (nub $ Gzip : tags) of
+                        SomeSing (tags' :: Sing filetag') -> withSingI tags' $
+                            SomeFile (coerce newFile :: File filetag' ft)
+                     else SomeFile (coerce newFile :: File filetag ft)
         else SomeFile newFile
+  where
+    gzipped fl = ".gz" `T.isSuffixOf` T.pack fl
 {-# INLINE downloadENCODE #-}
 
 -- | Download data from ENCODE portal to a given directory.
