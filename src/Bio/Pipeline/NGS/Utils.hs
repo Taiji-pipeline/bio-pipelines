@@ -10,10 +10,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Bio.Pipeline.NGS.Utils where
 
-import           Bio.Data.Bam                (bamToBed, readBam, runBam,
-                                              sortedBamToBedPE)
-import           Bio.Data.Bed                (BED, BED3 (..), BEDLike (..),
-                                              toLine)
+import           Bio.Data.Bam                (bamToBed, readBam,
+                                              sortedBamToBedPE, withBamFile)
+import           Bio.Data.Bed                (BED, BED3, BEDConvert (..),
+                                              BEDLike (..))
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
@@ -94,8 +94,8 @@ bam2Bed_ :: FilePath
          -> (BED -> Bool)  -- ^ Filtering function
          -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2Bed_ output fn fl = do
-    runBam $ readBam (fl^.location) =$= bamToBed =$= filterC fn =$=
-        mapC toLine =$= unlinesAsciiC =$= gzip $$ sinkFileBS output
+    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .| bamToBed .|
+        filterC fn .| mapC toLine .| unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
 {-# INLINE bam2Bed_ #-}
 
@@ -106,20 +106,20 @@ bam2BedPE_ :: Elem 'Sorted tags ~ 'True
            -> File tags 'Bam
            -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2BedPE_ output fn fl = do
-    runBam $ readBam (fl^.location) =$= sortedBamToBedPE =$=
-        filterC fn =$= concatMapC f =$= mapC toLine =$= unlinesAsciiC =$=
-        gzip $$ sinkFileBS output
+    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .|
+        sortedBamToBedPE .| filterC fn .| concatMapC f .| mapC toLine .|
+        unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
   where
     f (b1, b2)
-        | chrom b1 /= chrom b2 || bedStrand b1 == bedStrand b2 = Nothing
+        | b1^.chrom /= b2^.chrom || b1^.strand == b2^.strand = Nothing
         | otherwise =
-            let left = if fromJust (bedStrand b1)
-                    then chromStart b1 else chromStart b2
-                right = if not (fromJust $ bedStrand b2)
-                    then chromEnd b2 else chromEnd b1
+            let left = if fromJust (b1^.strand)
+                    then b1^.chromStart else b2^.chromStart
+                right = if not (fromJust $ b2^.strand)
+                    then b2^.chromEnd else b1^.chromEnd
             in if left < right
-                  then Just $ BED3 (chrom b1) left right
+                  then Just (asBed (b1^.chrom) left right :: BED3)
                   else error "Left coordinate is larger than right coordinate."
 {-# INLINE bam2BedPE_ #-}
 
@@ -129,10 +129,10 @@ concatBed_ :: (Elem 'Gzip tags1 ~ 'False, Elem 'Gzip tags2 ~ 'True)
            -> [Either (File tags1 'Bed) (File tags2 'Bed)]
            -> IO (File '[Gzip] 'Bed)
 concatBed_ output fls = do
-    runResourceT $ source =$= gzip $$ sinkFile output
+    runResourceT $ runConduit $ source .| gzip .| sinkFile output
     return $ location .~ output $ emptyFile
   where
     source = forM_ fls $ \fl -> case fl of
-        Left fl' -> sourceFileBS (fl'^.location)
-        Right fl' -> sourceFileBS (fl'^.location) =$= ungzip
+        Left fl'  -> sourceFileBS (fl'^.location)
+        Right fl' -> sourceFileBS (fl'^.location) .| ungzip
 {-# INLINE concatBed_ #-}

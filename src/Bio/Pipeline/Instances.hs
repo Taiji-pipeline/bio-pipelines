@@ -5,7 +5,7 @@
 
 module Bio.Pipeline.Instances where
 
-import           Bio.Data.Bed
+import           Bio.Data.Bed.Types
 import           Bio.Motif             (Motif (..), PWM (..))
 import           Control.Monad
 import           Data.Aeson

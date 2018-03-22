@@ -26,7 +26,6 @@ import qualified Bio.Data.Bed               as Bed
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
-import           Control.Monad.State.Strict (execStateT, forM, get, put)
 import qualified Data.ByteString.Char8      as B
 import           Data.Conduit.Zlib          (ungzip)
 import           Data.Default               (Default (..))
@@ -118,24 +117,15 @@ frip :: SingI tags1
      -> File tags2 'NarrowPeak -- ^ peaks
      -> IO Double
 frip rs peak = do
+    n <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
+        (if rs `hasTag` Gzip then ungzip else mapC id) .|
+        linesUnboundedAsciiC .| lengthC
     p <- Bed.readBed' $ peak^.location :: IO [Bed.BED3]
-    (n, m) <- flip execStateT (0::Int, 0::Int) $ runResourceT $
-        sourceFileBS (rs^.location) =$=
-        (if rs `hasTag` Gzip then ungzip else mapC id) =$=
-        linesUnboundedAsciiC =$=
-        mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) =$= getTotalReads =$=
-        Bed.intersectBed p $$ count
+    m <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
+        (if rs `hasTag` Gzip then ungzip else mapC id) .| linesUnboundedAsciiC .|
+        mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) .| Bed.intersectBed p .|
+        lengthC
     return $ fromIntegral m / fromIntegral n
-  where
-    getTotalReads = awaitForever $ \i -> do
-        (acc, x) <- get
-        let acc' = acc + 1
-        put $ acc' `seq` (acc', x)
-        yield i
-    count = awaitForever $ \_ -> do
-        (x, acc) <- get
-        let acc' = acc + 1
-        put $ acc' `seq` (x, acc')
 
 idrMultiple :: [File tags 'NarrowPeak]   -- ^ Peaks
             -> File tags 'NarrowPeak  -- ^ Merged peaks

@@ -1,10 +1,11 @@
-resolver: nightly-2017-08-25
+resolver: lts-11.1
 
 packages:
   - '.'
   - '../bio-experiments'
+  - '../bioinformatics-toolkit/bioinformatics-toolkit'
 
 extra-deps:
-  - bioinformatics-toolkit-0.3.2
-  - HsHTSLib-1.3.2.2
+  - HsHTSLib-1.3.2.3
   - cereal-vector-0.2.0.1
+  - clustering-0.4.0
