@@ -22,19 +22,20 @@ module Bio.Pipeline.CallPeaks
     , idrMultiple
     ) where
 
-import qualified Bio.Data.Bed               as Bed
+import qualified Bio.Data.Bed          as Bed
 import           Bio.Data.Experiment
 import           Conduit
 import           Control.Lens
-import qualified Data.ByteString.Char8      as B
-import           Data.Conduit.Zlib          (ungzip)
-import           Data.Default               (Default (..))
+import           Control.Monad
+import qualified Data.ByteString.Char8 as B
+import           Data.Conduit.Zlib     (ungzip)
+import           Data.Default          (Default (..))
 import           Data.List
 import           Data.Ord
-import           Data.Singletons            (SingI)
-import qualified Data.Text                  as T
-import           Shelly                     (fromText, mv, run_, shelly)
-import           System.IO.Temp             (withTempDirectory)
+import           Data.Singletons       (SingI)
+import qualified Data.Text             as T
+import           Shelly                (fromText, mv, run_, shelly)
+import           System.IO.Temp        (withTempDirectory)
 
 data CallPeakMode = Model
                   | NoModel Int Int   -- ^ implies "--nomodel --shift n --extsize m"
