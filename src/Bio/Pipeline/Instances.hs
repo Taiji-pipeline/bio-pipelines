@@ -56,6 +56,10 @@ deriving instance Generic BED
 instance Serialize BED
 instance Binary BED
 
+deriving instance Generic (BEDExt a b)
+instance (Serialize a, Serialize b) => Serialize (BEDExt a b)
+instance (Binary a, Binary b) => Binary (BEDExt a b)
+
 instance Serialize (MU.Matrix Double)
 instance Binary (MU.Matrix Double)
 
