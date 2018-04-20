@@ -55,7 +55,7 @@ filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
 
     return $ location .~ output $ emptyFile
   where
-    isPair = fl `hasTag` Pairend
+    isPair = fl `hasTag` PairedEnd
 
 -- | Remove duplicates
 removeDuplicates_ :: SingI tags
@@ -82,7 +82,7 @@ removeDuplicates_ picardPath output input =
             , T.pack markdupTmp, ">", T.pack filtTmp ]
 
         -- Re-sort by names for pairedend sequencing
-        if input `hasTag` Pairend
+        if input `hasTag` PairedEnd
             then run_ "samtools" [ "sort", T.pack filtTmp, "-n", "-T"
                 , T.pack $ tmp ++ "/tmp_sort", "-o", T.pack output ]
             else mv (fromText $ T.pack filtTmp) $ fromText $ T.pack output

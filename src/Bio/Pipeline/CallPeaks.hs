@@ -78,7 +78,7 @@ callPeaks output target input opt = do
         fileFormat opt
     return $ location .~ output $ emptyFile
   where
-    fileFormat | target `hasTag` Pairend = "BEDPE"
+    fileFormat | target `hasTag` PairedEnd = "BEDPE"
                | otherwise = "BED"
 
 macs2 :: FilePath        -- ^ Output

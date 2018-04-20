@@ -55,7 +55,7 @@ import           Bio.Pipeline.NGS.Utils
 
 bwaAlign :: ( tags1' ~ Delete 'Gzip tags1
             , tags2' ~ Delete 'Gzip tags2
-            , Elem 'Pairend tags2 ~ 'True )
+            , Elem 'PairedEnd tags2 ~ 'True )
          => (FilePath, String)
          -> FilePath
          -> BWAOptSetter
@@ -91,7 +91,7 @@ bamToBed :: ( Experiment experiment, SingI tags
          -> experiment S (File tags 'Bam)
          -> IO (experiment S (File (Insert' 'Gzip tags) 'Bed))
 bamToBed (dir, suffix) = mapFileWithDefName (dir ++ "/") suffix $ \output fl ->
-    if fl `hasTag` Pairend
+    if fl `hasTag` PairedEnd
         then bam2Bed_ output (const True) fl
         else bam2BedPE_ output (const True) fl
 
@@ -110,7 +110,7 @@ concatBed (dir, suffix) e = do
 
 starAlign :: ( SingI tags1, SingI tags2
              , tags1' ~ Delete 'Gzip tags1
-             , tags2' ~ Insert' 'Pairend (Delete 'Gzip tags2) )
+             , tags2' ~ Insert' 'PairedEnd (Delete 'Gzip tags2) )
           => (FilePath, String)
           -> FilePath            -- ^ STAR genome index
           -> STAROptSetter       -- ^ Options

@@ -28,7 +28,7 @@ sraToFastq :: SingI tags
            -> IO (Either (File '[Gzip] 'Fastq)
                          (File '[Gzip] 'Fastq, File '[Gzip] 'Fastq)
                  )
-sraToFastq outDir input = if input `hasTag` Pairend
+sraToFastq outDir input = if input `hasTag` PairedEnd
     then Right <$> fastqDumpPair input
     else Left <$> fastqDump input
   where
@@ -73,9 +73,9 @@ downloadFiles :: FilePath
               -> Either SomeFile (SomeFile, SomeFile)
               -> IO (Either SomeFile (SomeFile, SomeFile))
 downloadFiles outDir (Left (SomeFile fl))
-    | getFileType fl == SRA = if fl `hasTag` Pairend
+    | getFileType fl == SRA = if fl `hasTag` PairedEnd
         then bimap SomeFile (bimap SomeFile SomeFile) <$>
-            sraToFastq outDir (coerce fl :: File '[Pairend] 'SRA)
+            sraToFastq outDir (coerce fl :: File '[PairedEnd] 'SRA)
         else bimap SomeFile (bimap SomeFile SomeFile) <$>
             sraToFastq outDir (coerce fl :: File '[] 'SRA)
     | fl `hasTag` ENCODE = Left <$> downloadENCODE outDir (SomeFile fl)

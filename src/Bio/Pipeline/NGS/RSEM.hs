@@ -71,7 +71,7 @@ rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
         , "--seed", T.pack $ show $ opt^.rsemSeed
         , "-p", T.pack $ show $ opt^.rsemCores
         , "--no-bam-output", "--ci-memory", "30000" ] ++
-        ( if input `hasTag` Pairend
+        ( if input `hasTag` PairedEnd
             then ["--paired-end", "--forward-prob", "0"]
             else [] ) ++
         [T.pack $ input^.location, T.pack indexPrefix, T.pack outputPrefix]
