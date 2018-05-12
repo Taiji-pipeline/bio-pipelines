@@ -6,11 +6,11 @@
 {-# LANGUAGE TemplateHaskell     #-}
 module Bio.Pipeline.NGS.STAR
     ( STAROpts
-    , STAROptSetter
     , defaultSTAROpts
     , starCmd
     , starCores
     , starSort
+    , starTranscriptome
     , starTmpDir
     , starMkIndex
     , starAlign_
@@ -21,6 +21,7 @@ import           Control.Lens                ((.~), (^.))
 import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Either                 (isRight)
+import           Data.Maybe                  (isJust)
 import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
@@ -30,15 +31,14 @@ import           System.IO                   (hPutStrLn, stderr)
 import           System.IO.Temp              (withTempDirectory)
 
 data STAROpts = STAROpts
-    { _starCmd    :: FilePath
-    , _starCores  :: Int
-    , _starTmpDir :: FilePath
-    , _starSort   :: Bool
+    { _starCmd           :: FilePath    -- ^ The path to STAR executable
+    , _starCores         :: Int         -- ^ Number of parallel threads
+    , _starTmpDir        :: FilePath    -- ^ Directory for storing temporary files
+    , _starSort          :: Bool        -- ^ Whether to sort output Bam file
+    , _starTranscriptome :: Maybe FilePath -- ^ Output in transcript coordinates
     }
 
 makeLenses ''STAROpts
-
-type STAROptSetter = State STAROpts ()
 
 defaultSTAROpts :: STAROpts
 defaultSTAROpts = STAROpts
@@ -46,6 +46,7 @@ defaultSTAROpts = STAROpts
     , _starCores = 1
     , _starTmpDir = "./"
     , _starSort = False
+    , _starTranscriptome = Nothing
     }
 
 -- | Create index files for STAR
@@ -77,20 +78,18 @@ starMkIndex star dir fstqs anno r = do
 -- | Align RNA-seq raw reads with STAR
 starAlign_ :: (SingI tags, tags' ~ Delete 'Gzip tags)
            => FilePath                    -- ^ Genome alignment result
-           -> FilePath                    -- ^ Annotation alignment result
            -> FilePath                    -- ^ STAR genome index
-           -> STAROptSetter               -- ^ Options
+           -> STAROpts                    -- ^ Options
            -> Either (File tags 'Fastq)
                      (File tags 'Fastq, File tags 'Fastq)
-           -> IO (File tags' 'Bam, File tags' 'Bam)
-starAlign_ outputGenome outputAnno index setter dat = withTempDirectory
+           -> IO (File tags' 'Bam, Maybe (File tags' 'Bam))
+starAlign_ outputGenome index opt dat = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
-        run_ star $ ["--genomeDir", T.pack index, "--readFilesIn"] ++
-            map T.pack inputs ++
-            [ "--outFileNamePrefix", T.pack $ tmp_dir ++ "/"
-            , "--runThreadN",  T.pack $ show $ opt^.starCores ] ++
-            ( if zipped then ["--readFilesCommand", "zcat"] else [] ) ++
-            [ "--genomeLoad", "NoSharedMemory"
+        run_ star $ ["--readFilesIn"] ++ map T.pack inputs ++
+            ["--genomeDir", T.pack index
+            , "--outFileNamePrefix", T.pack $ tmp_dir ++ "/"
+            , "--runThreadN",  T.pack $ show $ opt^.starCores
+            , "--genomeLoad", "NoSharedMemory"
             , "--outFilterType", "BySJout"     -- reduces the number of ”spurious” junctions
             , "--outFilterMultimapNmax", "20"  -- max number of multiple alignments allowed for a read: if exceeded, the read is considered unmapped
             , "--alignSJoverhangMin", "8"      -- minimum overhang for unannotated junctions
@@ -103,13 +102,17 @@ starAlign_ outputGenome outputAnno index setter dat = withTempDirectory
             , "--outSAMunmapped", "Within", "--outSAMattributes"
             , "NH", "HI", "AS", "NM", "MD"
             , "--outSAMheaderCommentFile", "COfile.txt"
-            , "--outSAMheaderHD", "@HD", "VN:1.4", "SO:coordinate" ] ++
+            , "--outSAMheaderHD", "@HD", "VN:1.4", "SO:coordinate"
+            , "--sjdbScore", "1" ] ++
+            ( if zipped then ["--readFilesCommand", "zcat"] else [] ) ++
             ( if opt^.starSort
                 then [ "--outSAMtype", "BAM", "SortedByCoordinate"
                      , "--limitBAMsortRAM", "60000000000" ]
                 else ["--outSAMtype", "BAM", "Unsorted"] ) ++
             ( if isRight dat then [] else ["--outSAMstrandField", "intronMotif"] ) ++
-            ["--quantMode", "TranscriptomeSAM", "--sjdbScore", "1"]
+            ( if isJust (opt^.starTranscriptome)
+                then ["--quantMode", "TranscriptomeSAM"]
+                else [] )
 
         let starOutput | opt^.starSort = "/Aligned.sortedByCoord.out.bam"
                        | otherwise = "/Aligned.out.bam"
@@ -117,20 +120,21 @@ starAlign_ outputGenome outputAnno index setter dat = withTempDirectory
             T.pack $ outputGenome
 
         -- Sorting annotation bam
-        if opt^.starSort
-            then run_ "samtools" [ "sort", "-@", T.pack $ show $ opt^.starCores
-                    , "-T", T.pack $ tmp_dir ++ "/sort_bam_tmp"
-                    , "-o", T.pack outputAnno
-                    , T.pack $ tmp_dir ++ "/Aligned.toTranscriptome.out.bam" ]
-            else mv (fromText $ T.pack $ tmp_dir ++
-                    "/Aligned.toTranscriptome.out.bam") $ fromText $
-                    T.pack outputAnno
-
-        return ( location .~ outputGenome $ emptyFile
-               , location .~ outputAnno $ emptyFile )
+        case opt^.starTranscriptome of
+            Just outputAnno -> do
+                if opt^.starSort
+                    then run_ "samtools" [ "sort", "-@", T.pack $ show $ opt^.starCores
+                            , "-T", T.pack $ tmp_dir ++ "/sort_bam_tmp"
+                            , "-o", T.pack outputAnno
+                            , T.pack $ tmp_dir ++ "/Aligned.toTranscriptome.out.bam" ]
+                    else mv (fromText $ T.pack $ tmp_dir ++
+                            "/Aligned.toTranscriptome.out.bam") $ fromText $
+                            T.pack outputAnno
+                return ( location .~ outputGenome $ emptyFile
+                       , Just $ location .~ outputAnno $ emptyFile )
+            Nothing -> return ( location .~ outputGenome $ emptyFile, Nothing)
   where
     star = fromText $ T.pack $ opt^.starCmd
     (inputs, zipped) = case dat of
         Left fastq     -> ([fastq^.location], fastq `hasTag` Gzip)
         Right (f1, f2) -> ([f1^.location, f2^.location], f1 `hasTag` Gzip)
-    opt = execState setter defaultSTAROpts

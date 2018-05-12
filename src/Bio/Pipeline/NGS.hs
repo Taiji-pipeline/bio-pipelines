@@ -20,11 +20,11 @@ module Bio.Pipeline.NGS
     , concatBed
 
     , STAROpts
-    , STAROptSetter
     , starCmd
     , starCores
     , starSort
     , starTmpDir
+    , starTranscriptome
     , starMkIndex
     , starAlign
 
@@ -113,19 +113,17 @@ starAlign :: ( SingI tags1, SingI tags2
              , tags2' ~ Insert' 'PairedEnd (Delete 'Gzip tags2) )
           => (FilePath, String)
           -> FilePath            -- ^ STAR genome index
-          -> STAROptSetter       -- ^ Options
+          -> STAROpts            -- ^ Options
           -> Either (RNASeq S (File tags1 'Fastq))
                     (RNASeq S (File tags2 'Fastq, File tags2 'Fastq))
-          -> IO ( Either (RNASeq S (File tags1' 'Bam, File tags1' 'Bam))
-                         (RNASeq S (File tags2' 'Bam, File tags2' 'Bam)) )
-starAlign (dir, suffix) idx setter = bitraverse fun1 fun2
+          -> IO ( Either (RNASeq S (File tags1' 'Bam, Maybe (File tags1' 'Bam)))
+                         (RNASeq S (File tags2' 'Bam, Maybe (File tags2' 'Bam))) )
+starAlign (dir, suffix) idx opt = bitraverse fun1 fun2
   where
     fun1 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
-        (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
-        idx setter . Left
+        (output ++ "_genome" ++ suffix) idx opt . Left
     fun2 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
-        (output ++ "_genome" ++ suffix) (output ++ "_anno" ++ suffix)
-        idx setter . Right
+        (output ++ "_genome" ++ suffix) idx opt . Right
     f (a,b) = (coerce a, coerce b)
 
 rsemQuant :: SingI tags
