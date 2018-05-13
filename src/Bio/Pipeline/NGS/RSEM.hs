@@ -3,12 +3,12 @@
 {-# LANGUAGE TemplateHaskell   #-}
 module Bio.Pipeline.NGS.RSEM
     ( RSEMOpts
-    , RSEMOptSetter
+    , defaultRSEMOpts
     , rsemPath
     , rsemCores
     , rsemSeed
     , rsemMkIndex
-    , rsemQuant_
+    , rsemQuant
     ) where
 
 import           Bio.Data.Experiment
@@ -50,8 +50,6 @@ data RSEMOpts = RSEMOpts
 
 makeLenses ''RSEMOpts
 
-type RSEMOptSetter = State RSEMOpts ()
-
 defaultRSEMOpts :: RSEMOpts
 defaultRSEMOpts = RSEMOpts
     { _rsemPath = ""
@@ -60,13 +58,13 @@ defaultRSEMOpts = RSEMOpts
     }
 
 -- | Gene and transcript quantification using rsem
-rsemQuant_ :: SingI tags
-           => FilePath         -- ^ output prefix
-           -> FilePath         -- ^ Directory containing the index
-           -> RSEMOptSetter
-           -> File tags 'Bam
-           -> IO (File '[GeneQuant] 'Tsv, File '[TranscriptQuant] 'Tsv)
-rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
+rsemQuant :: SingI tags
+          => FilePath         -- ^ output prefix
+          -> FilePath         -- ^ Directory containing the index
+          -> File tags 'Bam
+          -> RSEMOpts
+          -> IO (File '[GeneQuant] 'Tsv, File '[TranscriptQuant] 'Tsv)
+rsemQuant outputPrefix indexPrefix input opt = shelly $ do
     run_ rsem $ [ "--bam", "--estimate-rspd", "--calc-ci"
         , "--seed", T.pack $ show $ opt^.rsemSeed
         , "-p", T.pack $ show $ opt^.rsemCores
@@ -81,4 +79,3 @@ rsemQuant_ outputPrefix indexPrefix setter input = shelly $ do
     return (geneQuant, transcriptQuant)
   where
     rsem = fromText $ T.pack $ opt^.rsemPath ++ "rsem-calculate-expression"
-    opt = execState setter defaultRSEMOpts

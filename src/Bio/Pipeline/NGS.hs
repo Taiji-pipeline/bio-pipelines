@@ -19,23 +19,6 @@ module Bio.Pipeline.NGS
     , bamToBed
     , concatBed
 
-    , STAROpts
-    , starCmd
-    , starCores
-    , starSort
-    , starTmpDir
-    , starTranscriptome
-    , starMkIndex
-    , starAlign
-
-    , RSEMOpts
-    , RSEMOptSetter
-    , rsemPath
-    , rsemCores
-    , rsemSeed
-    , rsemMkIndex
-    , rsemQuant
-
     , mapFileWithDefName
     ) where
 
@@ -107,33 +90,6 @@ concatBed (dir, suffix) e = do
   where
     fls = e^..replicates.folded.files
     output = printf "%s/%s_rep0%s" dir (T.unpack $ e^.eid) suffix
-
-starAlign :: ( SingI tags1, SingI tags2
-             , tags1' ~ Delete 'Gzip tags1
-             , tags2' ~ Insert' 'PairedEnd (Delete 'Gzip tags2) )
-          => (FilePath, String)
-          -> FilePath            -- ^ STAR genome index
-          -> STAROpts            -- ^ Options
-          -> Either (RNASeq S (File tags1 'Fastq))
-                    (RNASeq S (File tags2 'Fastq, File tags2 'Fastq))
-          -> IO ( Either (RNASeq S (File tags1' 'Bam, Maybe (File tags1' 'Bam)))
-                         (RNASeq S (File tags2' 'Bam, Maybe (File tags2' 'Bam))) )
-starAlign (dir, suffix) idx opt = bitraverse fun1 fun2
-  where
-    fun1 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
-        (output ++ "_genome" ++ suffix) idx opt . Left
-    fun2 = mapFileWithDefName (dir++"/") "" $ \output -> fmap f . starAlign_
-        (output ++ "_genome" ++ suffix) idx opt . Right
-    f (a,b) = (coerce a, coerce b)
-
-rsemQuant :: SingI tags
-          => FilePath
-          -> FilePath
-          -> RSEMOptSetter
-          -> RNASeq S (File tags 'Bam)
-          -> IO (RNASeq S (File '[GeneQuant] 'Tsv, File '[TranscriptQuant] 'Tsv))
-rsemQuant dir idx setter = mapFileWithDefName (dir++"/") "" $ \output ->
-    rsemQuant_ output idx setter
 
 mapFileWithDefName :: (Experiment experiment, Monad m, Traversable t)
                    => String   -- ^ Prefix
