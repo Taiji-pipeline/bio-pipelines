@@ -76,16 +76,16 @@ starMkIndex star dir fstqs anno r = do
     stamp = "/.bio_pipelines_star_index"
 
 -- | Align RNA-seq raw reads with STAR
-starAlign :: ( SingI tags1, SingI tags2
-             , tags1' ~ Delete 'Gzip tags1
-             , tags2' ~ Insert' 'PairedEnd (Delete 'Gzip tags2) )
+starAlign :: ( SingI tags
+             , tags1 ~ Delete 'Gzip tags
+             , tags2 ~ Insert' 'PairedEnd tags1 )
           => FilePath                    -- ^ Genome alignment result
           -> FilePath                    -- ^ STAR genome index
-          -> Either (File tags1 'Fastq)
-                    (File tags2 'Fastq, File tags2 'Fastq)
+          -> Either (File tags 'Fastq)
+                    (File tags 'Fastq, File tags 'Fastq)
           -> STAROpts                    -- ^ Options
-          -> IO ( Either (File tags1' 'Bam, Maybe (File tags1' 'Bam))
-                         (File tags2' 'Bam, Maybe (File tags2' 'Bam)) )
+          -> IO ( Either (File tags1 'Bam, Maybe (File tags1 'Bam))
+                         (File tags2 'Bam, Maybe (File tags2 'Bam)) )
 starAlign outputGenome index dat opt = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
         run_ star $ ["--readFilesIn"] ++ map T.pack inputs ++
