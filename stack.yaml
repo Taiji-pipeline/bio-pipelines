@@ -2,10 +2,10 @@ resolver: lts-11.1
 
 packages:
   - '.'
-  - '../bio-experiments'
-  - '../bioinformatics-toolkit/bioinformatics-toolkit'
 
 extra-deps:
+  - '../bio-experiments'
+  - '../bioinformatics-toolkit/bioinformatics-toolkit'
   - HsHTSLib-1.3.2.3
   - cereal-vector-0.2.0.1
   - clustering-0.4.0

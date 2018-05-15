@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell    #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Bio.Pipeline.Instances where
 
@@ -13,14 +14,11 @@ import           Data.Aeson.TH
 import           Data.Binary           (Binary)
 import qualified Data.ByteString.Char8 as B
 import           Data.CaseInsensitive  (CI, mk, original)
-import           Data.Hashable
 import qualified Data.Matrix.Unboxed   as MU
-import           Data.Maybe
 import           Data.Serialize        (Serialize (..))
 import qualified Data.Text             as T
 import           Data.Vector.Binary    ()
 import           Data.Vector.Serialize ()
-import qualified Data.Vector.Unboxed   as U
 import           GHC.Generics          (Generic)
 
 instance FromJSON B.ByteString where

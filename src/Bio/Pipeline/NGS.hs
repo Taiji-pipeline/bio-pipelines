@@ -14,7 +14,6 @@ module Bio.Pipeline.NGS
     , defaultBWAOpts
     , bwaMkIndex
     , bwaAlign
-    , filterBam
     , removeDuplicates
     , bamToBed
     , concatBed
@@ -29,11 +28,8 @@ import           Data.Promotion.Prelude.List (Delete, Elem)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Text.Printf                 (printf)
-import           Data.Coerce                   (coerce)
 
 import           Bio.Pipeline.NGS.BWA
-import           Bio.Pipeline.NGS.RSEM
-import           Bio.Pipeline.NGS.STAR
 import           Bio.Pipeline.NGS.Utils
 
 bwaAlign :: ( tags1' ~ Delete 'Gzip tags1
@@ -53,13 +49,6 @@ bwaAlign (dir, suffix) idx opt = bitraverse fun1 fun2
     fun2 = mapFileWithDefName (dir++"/") suffix $ \output ->
         bwaAlign_ output idx opt . Right
 
-filterBam :: ( SingI tags, Experiment experiment
-             , tags' ~ (Insert' 'Sorted tags) )
-          => (FilePath, String)
-          -> experiment S (File tags 'Bam)
-          -> IO (experiment S (File tags' 'Bam))
-filterBam (dir, suffix) = mapFileWithDefName (dir++"/") suffix filterBam_
-
 removeDuplicates :: (Experiment experiment, SingI tags)
                  => FilePath   -- ^ picard
                  -> (FilePath, String)
@@ -69,7 +58,7 @@ removeDuplicates picard (dir, suffix) = mapFileWithDefName (dir++"/") suffix
     (removeDuplicates_ picard)
 
 bamToBed :: ( Experiment experiment, SingI tags
-            , Elem 'Sorted tags ~ 'True )
+            , Elem 'CoordinateSorted tags ~ 'True )
          => (FilePath, String)
          -> experiment S (File tags 'Bam)
          -> IO (experiment S (File (Insert' 'Gzip tags) 'Bed))

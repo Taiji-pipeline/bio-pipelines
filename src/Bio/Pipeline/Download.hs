@@ -104,7 +104,7 @@ downloadENCODE outDir (SomeFile (fl :: File filetag filetype)) = do
                      else SomeFile (coerce newFile :: File filetag ft)
         else SomeFile newFile
   where
-    gzipped fl = ".gz" `T.isSuffixOf` T.pack fl
+    gzipped = T.isSuffixOf ".gz" . T.pack
 {-# INLINE downloadENCODE #-}
 
 -- | Download data from ENCODE portal to a given directory.

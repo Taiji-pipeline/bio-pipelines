@@ -20,7 +20,8 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
 import           Data.Maybe                  (fromJust)
-import           Data.Promotion.Prelude.List (Elem)
+import           Data.Promotion.Prelude      (Elem, If)
+import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
@@ -29,33 +30,59 @@ import           Shelly                      (escaping, fromText, mv, run_,
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
-filterBam_ :: (SingI tags, tags' ~ (Insert' 'Sorted tags))
-           => FilePath  -- ^ output
-           -> File tags 'Bam
-           -> IO (File tags' 'Bam)
-filterBam_ output fl = withTempDirectory "./" "tmp_filt_dir." $ \tmp -> do
+filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
+               (Insert' 'NameSorted (Delete 'CoordinateSorted tags)) tags )
+          => FilePath  -- ^ temp dir
+          -> FilePath  -- ^ output
+          -> File tags 'Bam
+          -> IO (File tags 'Bam)
+filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> do
     let input = T.pack $ fl^.location
-    shelly $ escaping False $ silently $ do
-        let tmp_filt = T.pack $ tmp ++ "/tmp_filt.bam"
-            tmp_fixmate = T.pack $ tmp ++ "/tmp_fixmate.bam"
-            tmp_sort = T.pack $ tmp ++ "/tmp_sort"
-        run_ "samtools" $ ["view"] ++
-            (if isPair then ["-f", "2"] else []) ++
-            ["-F", "0x70c", "-q", "30", "-u", input] ++
-            ( if isPair
-                then [ "|", "samtools", "sort", "-", "-n", "-T", tmp_sort
-                    , "-l", "0", "-o", tmp_filt ]
-                else [ "|", "samtools", "sort", "-", "-T", tmp_sort
-                    , "-l", "9", "-o", T.pack output ] )
-        when isPair $ do
-            run_ "samtools" ["fixmate", "-r", tmp_filt, tmp_fixmate]
+        tmp_filt = T.pack $ tmp ++ "/tmp_filt.bam"
+        tmp_fixmate = T.pack $ tmp ++ "/tmp_fixmate.bam"
+        tmp_sort = T.pack $ tmp ++ "/tmp_sort"
+    shelly $ escaping False $ silently $ if isPair
+        then do
+            run_ "samtools" [ "view", "-f", "2", "-F", "0x70c", "-q", "30"
+                , "-u", input, "|", "samtools", "sort", "-", "-n", "-T", tmp_sort
+                , "-l", "0", "-o", tmp_filt ]
+            run_ "samtools" ["fixmate", "-r", "-m", tmp_filt, tmp_fixmate]
             run_ "samtools" [ "view", "-F", "1804", "-f", "2", "-u"
-                , tmp_fixmate, "|", "samtools", "sort", "-", "-T"
-                , tmp_sort, "-l", "9", "-o", T.pack output ]
-
+                , tmp_fixmate, ">", T.pack output ]
+        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-u", input
+            , ">", T.pack output ]
     return $ location .~ output $ emptyFile
   where
     isPair = fl `hasTag` PairedEnd
+{-# INLINE filterBam #-}
+
+sortBam :: ( SingI tags, tags' ~ Insert' 'CoordinateSorted
+             (Delete 'NameSorted tags) )
+        => FilePath    -- ^ temp dir
+        -> FilePath    -- ^ output
+        -> File tags 'Bam
+        -> IO (File tags' 'Bam)
+sortBam tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp -> do
+    let input = T.pack $ fl^.location
+        tmp_sort = T.pack $ tmp ++ "/tmp_sort"
+    shelly $ silently $ run_ "samtools"
+        [ "sort", input, "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
+    return $ location .~ output $ emptyFile
+{-# INLINE sortBam #-}
+
+sortBamByName :: ( SingI tags, tags' ~ Insert' 'NameSorted
+                   (Delete 'CoordinateSorted tags) )
+              => FilePath    -- ^ temp dir
+              -> FilePath    -- ^ output
+              -> File tags 'Bam
+              -> IO (File tags' 'Bam)
+sortBamByName tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp -> do
+    let input = T.pack $ fl^.location
+        tmp_sort = T.pack $ tmp ++ "/tmp_sort"
+    shelly $ silently $ run_ "samtools"
+        [ "sort", input, "-n", "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
+    return $ location .~ output $ emptyFile
+{-# INLINE sortBamByName #-}
 
 -- | Remove duplicates
 removeDuplicates_ :: SingI tags
@@ -100,7 +127,7 @@ bam2Bed_ output fn fl = do
 {-# INLINE bam2Bed_ #-}
 
 -- | Convert name sorted BAM to BEDPE suitable for MACS2.
-bam2BedPE_ :: Elem 'Sorted tags ~ 'True
+bam2BedPE_ :: Elem 'CoordinateSorted tags ~ 'True
            => String
            -> ((BED, BED) -> Bool)
            -> File tags 'Bam
