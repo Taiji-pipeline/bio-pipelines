@@ -5,13 +5,12 @@
 {-# LANGUAGE TemplateHaskell   #-}
 module Bio.Pipeline.NGS.BWA
     ( BWAOpts
-    , BWAOptSetter
     , defaultBWAOpts
     , bwaCores
     , bwaSeedLen
     , bwaTmpDir
     , bwaMkIndex
-    , bwaAlign_
+    , bwaAlign
     ) where
 
 import           Bio.Data.Experiment
@@ -40,8 +39,6 @@ defaultBWAOpts = BWAOpts
     , _bwaTmpDir = "./"
     }
 
-type BWAOptSetter = State BWAOpts ()
-
 -- | Generate BWA genome index
 bwaMkIndex :: FilePath
            -> FilePath   -- ^ Index prefix, e.g., /path/genome.fa
@@ -61,13 +58,14 @@ bwaMkIndex input prefix = do
     dir = takeDirectory prefix
     stamp = "/.bio_pipelines_bwa_index"
 
-bwaAlign_ :: FilePath  -- ^ Path for the output bam file
-          -> FilePath  -- ^ Genome index
-          -> BWAOptSetter
-          -> Either (File tags 'Fastq)
-                    (File tags 'Fastq, File tags 'Fastq)
-          -> IO (File (Delete 'Gzip tags) 'Bam)
-bwaAlign_ output index setter fastq = do
+bwaAlign :: FilePath  -- ^ Path for the output bam file
+         -> FilePath  -- ^ Genome index
+         -> Either (File tags 'Fastq)
+                   (File tags 'Fastq, File tags 'Fastq)
+         -> BWAOpts
+         -> IO ( Either (File (Delete 'Gzip tags) 'Bam)
+                        (File (Insert' 'PairedEnd (Delete 'Gzip tags)) 'Bam) )
+bwaAlign output index fastq opt = do
     shelly $ escaping False $ run_ "bwa" $
         [ "mem", "-M"  -- "picard compatibility"
         , "-k", T.pack $ show $ opt^.bwaSeedLen
@@ -75,10 +73,11 @@ bwaAlign_ output index setter fastq = do
         , T.pack index ] ++ inputs ++
         [ "|", "samtools", "view", "-Su", "-"
         , ">", T.pack $ output ]
-    return $ location .~ output $ emptyFile
+    return $ case fastq of
+        Left _ -> Left $ location .~ output $ emptyFile
+        Right _ -> Right $ location .~ output $ emptyFile
   where
-    opt = execState setter defaultBWAOpts
     inputs = case fastq of
         Left f        -> [T.pack $ f^.location]
         Right (f1,f2) -> [T.pack $ f1^.location, T.pack $ f2^.location]
-{-# INLINE bwaAlign_ #-}
+{-# INLINE bwaAlign #-}

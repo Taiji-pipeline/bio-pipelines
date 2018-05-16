@@ -35,7 +35,7 @@ filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
           => FilePath  -- ^ temp dir
           -> FilePath  -- ^ output
           -> File tags 'Bam
-          -> IO (File tags 'Bam)
+          -> IO (File tags' 'Bam)
 filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_filt = T.pack $ tmp ++ "/tmp_filt.bam"
@@ -85,16 +85,15 @@ sortBamByName tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp
 {-# INLINE sortBamByName #-}
 
 -- | Remove duplicates
-removeDuplicates_ :: SingI tags
-                  => FilePath
-                  -> FilePath
-                  -> File tags 'Bam
-                  -> IO (File tags 'Bam)
-removeDuplicates_ picardPath output input =
+removeDuplicates :: Elem 'CoordinateSorted tags ~ 'True
+                 => FilePath
+                 -> FilePath
+                 -> File tags 'Bam
+                 -> IO (File tags 'Bam)
+removeDuplicates picardPath output input =
     withTempDirectory "./" "tmp_picard_dir." $ \tmp -> shelly $ do
         let qcFile = tmp ++ "/picard.qc"
             markdupTmp = tmp++"/dup_marked.bam"
-            filtTmp = tmp++"/dup_filt.bam"
         -- Mark duplicates
         run_ "java" ["-Xmx4G", "-jar", T.pack picardPath
             , "MarkDuplicates", T.pack $ "INPUT=" ++ (input^.location)
@@ -103,36 +102,29 @@ removeDuplicates_ picardPath output input =
             , T.pack $ "METRICS_FILE=" ++ qcFile
             , "VALIDATION_STRINGENCY=LENIENT"
             , "ASSUME_SORT_ORDER=coordinate", "REMOVE_DUPLICATES=false"]
-
         -- Remove duplicates.
         escaping False $ run_ "samtools" [ "view", "-F", "0x70c", "-b"
-            , T.pack markdupTmp, ">", T.pack filtTmp ]
-
-        -- Re-sort by names for pairedend sequencing
-        if input `hasTag` PairedEnd
-            then run_ "samtools" [ "sort", T.pack filtTmp, "-n", "-T"
-                , T.pack $ tmp ++ "/tmp_sort", "-o", T.pack output ]
-            else mv (fromText $ T.pack filtTmp) $ fromText $ T.pack output
-
+            , T.pack markdupTmp, ">", T.pack output ]
         qc <- liftIO $ T.readFile qcFile
         return $ info .~ [("QC", qc)] $ location .~ output $ emptyFile
+{-# INLINE removeDuplicates #-}
 
-bam2Bed_ :: FilePath
-         -> (BED -> Bool)  -- ^ Filtering function
-         -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
-bam2Bed_ output fn fl = do
+bam2Bed :: FilePath
+        -> (BED -> Bool)  -- ^ Filtering function
+        -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
+bam2Bed output fn fl = do
     withBamFile (fl^.location) $ \h -> runConduit $ readBam h .| bamToBed .|
         filterC fn .| mapC toLine .| unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
-{-# INLINE bam2Bed_ #-}
+{-# INLINE bam2Bed #-}
 
 -- | Convert name sorted BAM to BEDPE suitable for MACS2.
-bam2BedPE_ :: Elem 'CoordinateSorted tags ~ 'True
-           => String
-           -> ((BED, BED) -> Bool)
-           -> File tags 'Bam
-           -> IO (File (Insert' 'Gzip tags) 'Bed)
-bam2BedPE_ output fn fl = do
+bam2BedPE :: Elem 'NameSorted tags ~ 'True
+          => String
+          -> ((BED, BED) -> Bool)
+          -> File tags 'Bam
+          -> IO (File (Insert' 'Gzip tags) 'Bed)
+bam2BedPE output fn fl = do
     withBamFile (fl^.location) $ \h -> runConduit $ readBam h .|
         sortedBamToBedPE .| filterC fn .| concatMapC f .| mapC toLine .|
         unlinesAsciiC .| gzip .| sinkFileBS output
@@ -148,7 +140,7 @@ bam2BedPE_ output fn fl = do
             in if left < right
                   then Just (asBed (b1^.chrom) left right :: BED3)
                   else error "Left coordinate is larger than right coordinate."
-{-# INLINE bam2BedPE_ #-}
+{-# INLINE bam2BedPE #-}
 
 -- | Merge multiple BED files.
 concatBed_ :: (Elem 'Gzip tags1 ~ 'False, Elem 'Gzip tags2 ~ 'True)
