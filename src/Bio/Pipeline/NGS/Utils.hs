@@ -25,8 +25,7 @@ import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
-import           Shelly                      (escaping, fromText, mv, run_,
-                                              shelly, silently)
+import           Shelly                      (escaping, run_, shelly, silently)
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
@@ -143,15 +142,15 @@ bam2BedPE output fn fl = do
 {-# INLINE bam2BedPE #-}
 
 -- | Merge multiple BED files.
-concatBed_ :: (Elem 'Gzip tags1 ~ 'False, Elem 'Gzip tags2 ~ 'True)
-           => FilePath
-           -> [Either (File tags1 'Bed) (File tags2 'Bed)]
-           -> IO (File '[Gzip] 'Bed)
-concatBed_ output fls = do
+concatBed :: (Elem 'Gzip tags1 ~ 'False, Elem 'Gzip tags2 ~ 'True)
+          => FilePath
+          -> [Either (File tags1 'Bed) (File tags2 'Bed)]
+          -> IO (File '[Gzip] 'Bed)
+concatBed output fls = do
     runResourceT $ runConduit $ source .| gzip .| sinkFile output
     return $ location .~ output $ emptyFile
   where
     source = forM_ fls $ \fl -> case fl of
         Left fl'  -> sourceFileBS (fl'^.location)
         Right fl' -> sourceFileBS (fl'^.location) .| ungzip
-{-# INLINE concatBed_ #-}
+{-# INLINE concatBed #-}

@@ -19,7 +19,6 @@ library
   ghc-options: -Wall -fno-warn-unticked-promoted-constructors
   exposed-modules:
     Bio.Pipeline.CallPeaks
-    Bio.Pipeline.NGS
     Bio.Pipeline.NGS.RSEM
     Bio.Pipeline.NGS.BWA
     Bio.Pipeline.NGS.STAR
