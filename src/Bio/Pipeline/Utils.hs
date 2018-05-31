@@ -21,9 +21,8 @@ newtype Directory = Directory FilePath deriving (Show, Read, Ord, Eq, Generic)
 instance IsString Directory where
     fromString = Directory
 
-instance Monoid Directory where
-    mempty = Directory ""
-    mappend (Directory x) (Directory y) = Directory (x ++ y)
+instance Semigroup Directory where
+    (<>) (Directory x) (Directory y) = Directory (x ++ y)
 
 instance ToJSON Directory where
     toEncoding (Directory fl) = toEncoding fl
