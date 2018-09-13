@@ -42,7 +42,8 @@ filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> 
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ escaping False $ silently $ if isPair
         then do
-            run_ "samtools" [ "view", "-f", "2", "-F", "0x70c", "-q", "30"
+            bashPipeFail bash_ "samtools"
+                [ "view", "-f", "2", "-F", "0x70c", "-q", "30"
                 , "-u", input, "|", "samtools", "sort", "-", "-n", "-T", tmp_sort
                 , "-l", "0", "-o", tmp_filt ]
             run_ "samtools" ["fixmate", "-r", "-m", tmp_filt, tmp_fixmate]
