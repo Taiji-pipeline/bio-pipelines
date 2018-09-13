@@ -25,7 +25,7 @@ import           Data.Promotion.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
-import           Shelly                      (escaping, run_, shelly, silently)
+import           Shelly                      (escaping, run_, shelly, silently, bash_, bashPipeFail)
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
