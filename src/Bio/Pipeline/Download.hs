@@ -4,7 +4,11 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Bio.Pipeline.Download (downloadFiles) where
+module Bio.Pipeline.Download
+    ( downloadFiles
+    , downloadENCODE
+    , downloadENCODE'
+    ) where
 
 import           Bio.Data.Experiment
 import           Bio.Data.Experiment.File   (SFileType)
