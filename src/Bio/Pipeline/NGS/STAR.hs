@@ -22,7 +22,7 @@ import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Either                 (isRight)
 import           Data.Maybe                  (isJust)
-import           Data.Promotion.Prelude.List (Delete)
+import           Data.Singletons.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Shelly                      (fromText, mkdir_p, mv, run_,

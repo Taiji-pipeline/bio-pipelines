@@ -17,7 +17,7 @@ import           Bio.Data.Experiment
 import           Control.Lens                ((.~), (^.))
 import           Control.Lens                (makeLenses)
 import           Control.Monad.State.Lazy
-import           Data.Promotion.Prelude.List (Delete)
+import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import           Shelly                      (cp, escaping, fromText, mkdir_p,
                                               run_, shelly, test_f, touchfile)

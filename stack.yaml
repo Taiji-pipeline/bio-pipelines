@@ -1,11 +1,14 @@
-resolver: lts-11.1
+resolver: lts-13.2
 
 packages:
   - '.'
 
 extra-deps:
-  - '../bio-experiments'
-  - '../bioinformatics-toolkit/bioinformatics-toolkit'
-  - HsHTSLib-1.3.2.3
-  - cereal-vector-0.2.0.1
+  - git:     https://github.com/Taiji-pipeline/bio-experiments.git
+    commit:  049f1e93b611c01e9afc2b6a1010802e07a39af5
+  - git:     https://github.com/kaizhang/bioinformatics-toolkit.git
+    commit:  c28588943e61e4d1ae9e282270e466f349d6e8b7
+    subdirs:
+      - bioinformatics-toolkit
+  - HsHTSLib-1.3.2.4
   - clustering-0.4.0

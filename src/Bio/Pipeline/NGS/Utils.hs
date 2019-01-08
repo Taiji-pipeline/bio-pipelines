@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Bio.Pipeline.NGS.Utils where
 
-import           Bio.Data.Bam                (bamToBed, readBam,
+import           Bio.Data.Bam                (bamToBedC, readBam,
                                               sortedBamToBedPE, withBamFile)
 import           Bio.Data.Bed                (BED, BED3, BEDConvert (..),
                                               BEDLike (..))
@@ -20,9 +20,8 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
 import           Data.Maybe                  (fromJust)
-import           Data.Promotion.Prelude      (Elem, If)
-import           Data.Promotion.Prelude.List (Delete)
-import           Data.Singletons             (SingI)
+import           Data.Singletons.Prelude      (Elem, If, SingI)
+import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import qualified Data.Text.IO                as T
 import           Shelly                      (escaping, run_, shelly, silently, bash_, bashPipeFail)
@@ -113,7 +112,7 @@ bam2Bed :: FilePath
         -> (BED -> Bool)  -- ^ Filtering function
         -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2Bed output fn fl = do
-    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .| bamToBed .|
+    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .| bamToBedC .|
         filterC fn .| mapC toLine .| unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
 {-# INLINE bam2Bed #-}
