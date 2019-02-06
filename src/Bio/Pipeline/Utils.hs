@@ -6,6 +6,7 @@ module Bio.Pipeline.Utils
     ( Directory
     , asDir
     , getPath
+    , QC(..)
     ) where
 
 import           Control.Monad.IO.Class
@@ -42,3 +43,12 @@ getPath :: MonadIO m => Directory -> m FilePath
 getPath (Directory dir) = liftIO $ shelly $
     mkdir_p (fromText $ T.pack dir) >> return dir
 {-# INLINE getPath #-}
+
+data QC = QC
+    { _qc_type :: String
+    , _qc_sample_name :: String
+    , _qc_result :: Double
+    , _qc_score :: Maybe Int
+    } deriving (Generic)
+
+instance Serialize QC
