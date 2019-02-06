@@ -52,3 +52,5 @@ data QC = QC
     } deriving (Generic, Read, Show, Eq, Ord)
 
 instance Serialize QC
+instance FromJSON QC
+instance ToJSON QC
