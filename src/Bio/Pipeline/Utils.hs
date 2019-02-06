@@ -49,6 +49,6 @@ data QC = QC
     , _qc_sample_name :: String
     , _qc_result :: Double
     , _qc_score :: Maybe Int
-    } deriving (Generic)
+    } deriving (Generic, Read, Show, Eq, Ord)
 
 instance Serialize QC
