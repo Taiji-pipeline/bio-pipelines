@@ -44,9 +44,16 @@ getPath (Directory dir) = liftIO $ shelly $
     mkdir_p (fromText $ T.pack dir) >> return dir
 {-# INLINE getPath #-}
 
+data QCSamples = Single String
+               | Pair String String
+               deriving (Generic, Read, Show, Eq, Ord)
+instance Serialize QCSamples
+instance FromJSON QCSamples
+instance ToJSON QCSamples
+
 data QC = QC
-    { _qc_type :: String
-    , _qc_sample_name :: String
+    { _qc_name :: String
+    , _qc_sample_name :: QCSamples
     , _qc_result :: Double
     , _qc_score :: Maybe Int
     } deriving (Generic, Read, Show, Eq, Ord)
