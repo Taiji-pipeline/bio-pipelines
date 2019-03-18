@@ -19,14 +19,15 @@ library
   ghc-options: -Wall -fno-warn-unticked-promoted-constructors
   exposed-modules:
     Bio.Pipeline.CallPeaks
-    Bio.Pipeline.NGS.RSEM
-    Bio.Pipeline.NGS.BWA
-    Bio.Pipeline.NGS.STAR
-    Bio.Pipeline.NGS.Utils
+    Bio.Pipeline.Barcode
     Bio.Pipeline.Utils
     Bio.Pipeline.Instances
     Bio.Pipeline.Download
     Bio.Pipeline.Report
+    Bio.Pipeline.NGS.RSEM
+    Bio.Pipeline.NGS.BWA
+    Bio.Pipeline.NGS.STAR
+    Bio.Pipeline.NGS.Utils
 
   build-depends:
       base >=4.0 && <5.0
@@ -40,6 +41,7 @@ library
     , conduit-extra
     , containers
     , cereal
+    , cereal-vector
     , data-default
     , filepath
     , hashable
@@ -53,8 +55,8 @@ library
     , temporary
     , split
     , shelly
+    , unordered-containers
     , vector
-    , cereal-vector
     , vector-binary-instances
 
   hs-source-dirs:      src
