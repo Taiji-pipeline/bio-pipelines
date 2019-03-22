@@ -9,7 +9,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Kai Zhang
 maintainer:          kai@kzhang.org
-copyright:           (c) 2017 Kai Zhang
+copyright:           (c) 2019 Kai Zhang
 category:            Bio
 build-type:          Simple
 -- extra-source-files:

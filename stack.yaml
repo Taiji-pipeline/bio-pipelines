@@ -6,9 +6,6 @@ packages:
 extra-deps:
   - git:     https://github.com/Taiji-pipeline/bio-experiments.git
     commit:  049f1e93b611c01e9afc2b6a1010802e07a39af5
-  - git:     https://github.com/kaizhang/bioinformatics-toolkit.git
-    commit:  9a10b0deb52ea5072990c93d2449f43ed497ef42
-    subdirs:
-      - bioinformatics-toolkit
-  - HsHTSLib-1.3.2.4
+  - bioinformatics-toolkit-0.6.0
+  - HsHTSLib-1.9.2
   - clustering-0.4.1

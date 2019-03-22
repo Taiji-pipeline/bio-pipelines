@@ -10,8 +10,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Bio.Pipeline.NGS.Utils where
 
-import           Bio.Data.Bam                (bamToBedC, readBam,
-                                              sortedBamToBedPE, withBamFile)
+import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
+                                              sortedBamToBedPE )
 import           Bio.Data.Bed                (BED, BED3, BEDConvert (..),
                                               BEDLike (..))
 import           Bio.Data.Experiment
@@ -112,7 +112,8 @@ bam2Bed :: FilePath
         -> (BED -> Bool)  -- ^ Filtering function
         -> File tags 'Bam -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2Bed output fn fl = do
-    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .| bamToBedC .|
+    header <- getBamHeader $ fl^.location
+    runResourceT $ runConduit $ streamBam (fl^.location) .| bamToBedC header .|
         filterC fn .| mapC toLine .| unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
 {-# INLINE bam2Bed #-}
@@ -124,8 +125,9 @@ bam2BedPE :: Elem 'NameSorted tags ~ 'True
           -> File tags 'Bam
           -> IO (File (Insert' 'Gzip tags) 'Bed)
 bam2BedPE output fn fl = do
-    withBamFile (fl^.location) $ \h -> runConduit $ readBam h .|
-        sortedBamToBedPE .| filterC fn .| concatMapC f .| mapC toLine .|
+    header <- getBamHeader $ fl^.location
+    runResourceT $ runConduit $ streamBam (fl^.location) .|
+        sortedBamToBedPE header .| filterC fn .| concatMapC f .| mapC toLine .|
         unlinesAsciiC .| gzip .| sinkFileBS output
     return $ location .~ output $ emptyFile
   where
