@@ -20,7 +20,8 @@ import           Control.Monad.State.Lazy
 import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import           Shelly                      (cp, escaping, fromText, mkdir_p,
-                                              run_, shelly, test_f, touchfile)
+                                              run_, shelly, test_f, touchfile,
+                                              bashPipeFail, bash_)
 import           System.FilePath             (takeDirectory)
 import           System.IO                   (hPutStrLn, stderr)
 
@@ -66,7 +67,7 @@ bwaAlign :: FilePath  -- ^ Path for the output bam file
          -> IO ( Either (File (Delete 'Gzip tags) 'Bam)
                         (File (Insert' 'PairedEnd (Delete 'Gzip tags)) 'Bam) )
 bwaAlign output index fastq opt = do
-    shelly $ escaping False $ run_ "bwa" $
+    shelly $ escaping False $ bashPipeFail bash_ "bwa" $
         [ "mem", "-M"  -- "picard compatibility"
         , "-k", T.pack $ show $ opt^.bwaSeedLen
         , "-t", T.pack $ show $ opt^.bwaCores
