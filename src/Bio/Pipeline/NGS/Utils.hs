@@ -23,8 +23,7 @@ import           Data.Maybe                  (fromJust)
 import           Data.Singletons.Prelude      (Elem, If, SingI)
 import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.Text                   as T
-import qualified Data.Text.IO                as T
-import           Shelly                      (escaping, run_, shelly, silently, bash_, bashPipeFail)
+import           Shelly                      (lastStderr, escaping, run, run_, shelly, silently, bash_, bashPipeFail)
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
@@ -89,23 +88,11 @@ removeDuplicates :: Elem 'CoordinateSorted tags ~ 'True
                  -> FilePath
                  -> File tags 'Bam
                  -> IO (File tags 'Bam)
-removeDuplicates picardPath output input =
-    withTempDirectory "./" "tmp_picard_dir." $ \tmp -> shelly $ do
-        let qcFile = tmp ++ "/picard.qc"
-            markdupTmp = tmp++"/dup_marked.bam"
-        -- Mark duplicates
-        run_ "java" ["-Xmx4G", "-jar", T.pack picardPath
-            , "MarkDuplicates", T.pack $ "INPUT=" ++ (input^.location)
-            , T.pack $ "OUTPUT=" ++ markdupTmp
-            , T.pack $ "TMP_DIR=" ++ tmp
-            , T.pack $ "METRICS_FILE=" ++ qcFile
-            , "VALIDATION_STRINGENCY=LENIENT"
-            , "ASSUME_SORT_ORDER=coordinate", "REMOVE_DUPLICATES=false"]
-        -- Remove duplicates.
-        escaping False $ run_ "samtools" [ "view", "-F", "0x70c", "-b"
-            , T.pack markdupTmp, ">", T.pack output ]
-        qc <- liftIO $ T.readFile qcFile
-        return $ info .~ [("QC", qc)] $ location .~ output $ emptyFile
+removeDuplicates picardPath output input = shelly $ do
+    _ <- run "samtools" [ "markdup", T.pack $ input^.location
+        , T.pack output, "-r", "-s" ]
+    qc <- lastStderr
+    return $ info .~ [("QC", qc)] $ location .~ output $ emptyFile
 {-# INLINE removeDuplicates #-}
 
 bam2Bed :: FilePath
