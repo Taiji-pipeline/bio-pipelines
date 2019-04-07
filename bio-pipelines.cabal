@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 library
   ghc-options: -Wall -fno-warn-unticked-promoted-constructors
   exposed-modules:
+    Bio.Pipeline
     Bio.Pipeline.CallPeaks
     Bio.Pipeline.Barcode
     Bio.Pipeline.Utils
