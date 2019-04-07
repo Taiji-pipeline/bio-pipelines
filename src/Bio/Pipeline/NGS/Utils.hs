@@ -85,10 +85,9 @@ sortBamByName tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp
 -- | Remove duplicates
 removeDuplicates :: Elem 'CoordinateSorted tags ~ 'True
                  => FilePath
-                 -> FilePath
                  -> File tags 'Bam
                  -> IO (File tags 'Bam)
-removeDuplicates picardPath output input = shelly $ do
+removeDuplicates output input = shelly $ do
     _ <- run "samtools" [ "markdup", T.pack $ input^.location
         , T.pack output, "-r", "-s" ]
     qc <- lastStderr

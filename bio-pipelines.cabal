@@ -43,6 +43,7 @@ library
     , cereal
     , cereal-vector
     , data-default
+    , fgl
     , filepath
     , hashable
     , http-conduit
