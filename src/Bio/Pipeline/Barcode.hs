@@ -68,6 +68,7 @@ mkUMINet umi = G.mkGraph nds es
     comb _ = []
 {-# INLINE mkUMINet #-}
 
+-- | Remove barcodes from the fastq record.
 deBarcode :: [Int]   -- ^ Lengths of the barcodes
           -> Fastq
           -> Maybe ([BarCode], Fastq)
@@ -75,8 +76,7 @@ deBarcode lengths Fastq{..}
     | any (\x -> nBelowQ 10 x > 1) (go lengths fastqSeqQual) = Nothing
     | otherwise = Just (map BarCode barcodes, fastq)
   where
-    fastq = Fastq ident (B.drop n fastqSeq) $ B.drop n fastqSeqQual
-    ident = B.intercalate "+" barcodes <> "_" <> fastqSeqId
+    fastq = Fastq fastqSeqId (B.drop n fastqSeq) $ B.drop n fastqSeqQual
     barcodes = go lengths fastqSeq
     go (x:xs) s = B.take x s : go xs (B.drop x s)
     go _ _ = []
