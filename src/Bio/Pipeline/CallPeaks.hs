@@ -121,7 +121,7 @@ frip rs peak = do
     n <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
         (if rs `hasTag` Gzip then ungzip else mapC id) .|
         linesUnboundedAsciiC .| lengthC
-    p <- Bed.readBed' $ peak^.location :: IO [Bed.BED3]
+    p <- Bed.readBed $ peak^.location :: IO [Bed.BED3]
     m <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
         (if rs `hasTag` Gzip then ungzip else mapC id) .| linesUnboundedAsciiC .|
         mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) .| Bed.intersectBed p .|

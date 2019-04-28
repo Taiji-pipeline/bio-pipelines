@@ -17,8 +17,7 @@ module Bio.Pipeline.NGS.STAR
     ) where
 
 import           Bio.Data.Experiment
-import           Control.Lens                ((.~), (^.))
-import           Control.Lens                (makeLenses)
+import           Control.Lens                ((.~), (^.), makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Either                 (isRight)
 import           Data.Maybe                  (isJust)
