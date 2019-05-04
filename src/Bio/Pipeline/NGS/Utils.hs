@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 module Bio.Pipeline.NGS.Utils where
 
 import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
@@ -22,8 +23,9 @@ import           Data.Conduit.Zlib           (gzip, ungzip)
 import           Data.Maybe                  (fromJust)
 import           Data.Singletons.Prelude      (Elem, If, SingI)
 import           Data.Singletons.Prelude.List (Delete)
+import qualified Data.ByteString.Char8 as B
 import qualified Data.Text                   as T
-import           Shelly                      (lastStderr, escaping, run, run_, shelly, silently, bash_, bashPipeFail)
+import           Shelly  hiding (FilePath)
 import           System.IO.Temp              (withTempDirectory)
 
 -- | Remove low quality and redundant tags, fill in mate information.
@@ -142,3 +144,21 @@ concatBed output fls = do
         Left fl'  -> sourceFileBS (fl'^.location)
         Right fl' -> sourceFileBS (fl'^.location) .| ungzip
 {-# INLINE concatBed #-}
+
+-- | Create a bigbed file from a bed file.
+bedToBigBed :: FilePath    -- ^ Output
+            -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
+            -> File tags 'Bed
+            -> IO (File tags 'BigBed)
+bedToBigBed output chrSizes input = shelly $ test_px "bedToBigBed" >>= \case
+    False -> error "Please download: bedToBigBed."
+    True -> withTempDirectory "./" "tmp_dir" $ \dir -> do
+        let tmpSort = T.pack $ dir ++ "/tmp_sort.bed"
+            tmpChr = T.pack $ dir ++ "/tmp_chr.txt"
+        escaping False $ run_ "sort" ["-T", T.pack dir, "-k1,1", "-k2,2n"
+            , T.pack $ input^.location, ">", tmpSort]
+        liftIO $ B.writeFile (T.unpack tmpChr) $ B.unlines $
+            map (\(a,b) -> a <> "\t" <> B.pack (show b)) chrSizes
+        run_ "bedToBigBed" [tmpSort, tmpChr, T.pack output]
+        return $ location .~ output $ emptyFile
+{-# INLINE bedToBigBed #-}
