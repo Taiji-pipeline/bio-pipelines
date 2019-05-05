@@ -7,7 +7,8 @@
 module Bio.Pipeline.Instances where
 
 import           Bio.Data.Bed.Types
-import           Bio.Motif             (Motif (..), PWM (..))
+import           Bio.Data.Bed.Utils
+import           Bio.Motif             (Motif (..), PWM (..), Bkgd(..), CDF(..))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.TH
@@ -68,6 +69,18 @@ instance Binary PWM
 deriving instance Generic Motif
 instance Serialize Motif
 instance Binary Motif
+
+deriving instance Generic Bkgd
+instance Serialize Bkgd
+instance Binary Bkgd
+
+deriving instance Generic CDF
+instance Serialize CDF
+instance Binary CDF
+
+deriving instance Generic CutoffMotif
+instance Serialize CutoffMotif
+instance Binary CutoffMotif
 
 instance Serialize (CI B.ByteString) where
     put = put . original
