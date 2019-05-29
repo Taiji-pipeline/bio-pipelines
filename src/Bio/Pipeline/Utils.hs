@@ -10,7 +10,7 @@ module Bio.Pipeline.Utils
 
 import           Control.Monad.IO.Class
 import           Data.Aeson             (FromJSON (..), ToJSON (..))
-import           Data.Serialize         (Serialize (..))
+import Data.Binary (Binary(..))
 import           Data.String            (IsString (..))
 import qualified Data.Text              as T
 import           GHC.Generics           (Generic)
@@ -30,7 +30,7 @@ instance ToJSON Directory where
 instance FromJSON Directory where
     parseJSON = fmap Directory . parseJSON
 
-instance Serialize Directory
+instance Binary Directory
 
 asDir :: FilePath -> Directory
 asDir = Directory

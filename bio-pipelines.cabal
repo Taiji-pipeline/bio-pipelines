@@ -41,8 +41,6 @@ library
     , conduit >= 1.3.0
     , conduit-extra
     , containers
-    , cereal
-    , cereal-vector
     , data-default
     , fgl
     , filepath

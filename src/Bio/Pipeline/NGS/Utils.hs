@@ -146,7 +146,8 @@ concatBed output fls = do
 {-# INLINE concatBed #-}
 
 -- | Create a bigbed file from a bed file.
-bedToBigBed :: FilePath    -- ^ Output
+bedToBigBed :: Elem 'Gzip tags ~ 'False
+            => FilePath    -- ^ Output
             -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
             -> File tags 'Bed
             -> IO (File tags 'BigBed)
