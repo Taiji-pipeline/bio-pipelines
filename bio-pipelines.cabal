@@ -42,6 +42,7 @@ library
     , conduit-extra
     , containers
     , data-default
+    , exceptions
     , fgl
     , filepath
     , hashable
