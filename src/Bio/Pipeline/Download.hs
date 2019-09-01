@@ -8,6 +8,7 @@ module Bio.Pipeline.Download
     ( downloadFiles
     , downloadENCODE
     , downloadENCODE'
+    , downloadData
     ) where
 
 import           Bio.Data.Experiment
@@ -20,6 +21,7 @@ import qualified Data.ByteString.Char8      as B
 import           Data.Coerce                (coerce)
 import           Data.List                  (nub)
 import           Data.List.Split            (splitOn)
+import Data.Conduit.Zlib (multiple, ungzip)
 import           Data.Maybe
 import           Data.Singletons
 import qualified Data.Text                  as T
@@ -128,3 +130,18 @@ downloadENCODE' acc dir = do
   where
     url = "https://www.encodeproject.org/files/" ++ acc ++ "/@@download"
 {-# INLINE downloadENCODE' #-}
+
+downloadData :: FilePath
+             -> String
+             -> Bool
+             -> IO ()
+downloadData output url unzip = do
+     request <- parseRequest url
+     manager <- newManager tlsManagerSettings
+     runResourceT $ do
+         response <- http request manager
+         runConduit $ responseBody response .| sink
+  where
+    sink | unzip = multiple ungzip .| sinkFileBS output
+         | otherwise = sinkFileBS output
+{-# INLINE downloadData #-}

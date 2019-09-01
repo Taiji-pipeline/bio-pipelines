@@ -43,13 +43,12 @@ filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> 
     shelly $ escaping False $ silently $ if isPair
         then do
             bashPipeFail bash_ "samtools"
-                [ "view", "-f", "2", "-F", "0x70c", "-q", "30"
-                , "-u", input, "|", "samtools", "sort", "-", "-n", "-T", tmp_sort
-                , "-l", "0", "-o", tmp_filt ]
-            run_ "samtools" ["fixmate", "-r", "-m", tmp_filt, tmp_fixmate]
-            run_ "samtools" [ "view", "-F", "1804", "-f", "2", "-u"
-                , tmp_fixmate, ">", T.pack output ]
-        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-u", input
+                [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
+                , "samtools", "sort", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
+                , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
+                , "samtools", "view", "-F", "1804", "-f", "2", "-1", "-", ">"
+                , T.pack output ]
+        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-1", input
             , ">", T.pack output ]
     return $ location .~ output $ emptyFile
   where
