@@ -134,26 +134,27 @@ downloadENCODE' acc dir = do
 {-# INLINE downloadENCODE' #-}
 
 getUrl :: FilePath -> String -> Bool -> IO ()
-getUrl output url unzip
-    | "http" `isPrefixOf` url = httpDownload output url unzip
+getUrl output url inflate
+    | "http" `isPrefixOf` url = httpDownload output url inflate
     | "ftp" `isPrefixOf` url = do
         let (_, url') = T.breakOnEnd "ftp://" (T.pack url)
             (base, filename) = T.breakOn "/" url'
-        ftpDownload output (T.unpack base) (T.unpack filename) unzip
+        ftpDownload output (T.unpack base) (T.unpack filename) inflate
     | otherwise = error "Unknown protocol"
 
 httpDownload :: FilePath
              -> String
              -> Bool
              -> IO ()
-httpDownload output url unzip = do
-     request <- parseRequest url
-     manager <- newManager tlsManagerSettings
-     runResourceT $ do
-         response <- http request manager
-         runConduit $ responseBody response .| sink
+httpDownload output url inflate = do
+    shelly $ mkdir_p $ fromText $ fst $ T.breakOnEnd "/" $ T.pack output
+    request <- parseRequest url
+    manager <- newManager tlsManagerSettings
+    runResourceT $ do
+        response <- http request manager
+        runConduit $ responseBody response .| sink
   where
-    sink | unzip = multiple ungzip .| sinkFileBS output
+    sink | inflate = multiple ungzip .| sinkFileBS output
          | otherwise = sinkFileBS output
 {-# INLINE httpDownload #-}
 
@@ -162,10 +163,11 @@ ftpDownload :: FilePath
             -> String
             -> Bool
             -> IO ()
-ftpDownload output base filename unzip = withFTP base 21 $ \h _ -> do
+ftpDownload output base filename inflate = withFTP base 21 $ \h _ -> do
     _ <- login h "anonymous" ""
+    shelly $ mkdir_p $ fromText $ fst $ T.breakOnEnd "/" $ T.pack output
     runResourceT $ runConduit $ retr h filename .| sink
   where
-    sink | unzip = multiple ungzip .| sinkFileBS output
+    sink | inflate = multiple ungzip .| sinkFileBS output
          | otherwise = sinkFileBS output
 {-# INLINE ftpDownload #-}
