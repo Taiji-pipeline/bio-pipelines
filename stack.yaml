@@ -1,4 +1,6 @@
-resolver: nightly-2019-03-17
+resolver: lts-14.4
+
+allow-newer: true
 
 packages:
   - '.'
@@ -14,3 +16,5 @@ extra-deps:
 
   - HsHTSLib-1.9.2
   - clustering-0.4.1
+  - ftp-client-conduit-0.5.0.4
+  - ftp-client-0.5.1.1

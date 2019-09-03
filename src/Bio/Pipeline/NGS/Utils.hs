@@ -37,8 +37,6 @@ filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
           -> IO (File tags' 'Bam)
 filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> do
     let input = T.pack $ fl^.location
-        tmp_filt = T.pack $ tmp ++ "/tmp_filt.bam"
-        tmp_fixmate = T.pack $ tmp ++ "/tmp_fixmate.bam"
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ escaping False $ silently $ if isPair
         then do

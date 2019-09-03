@@ -8,7 +8,7 @@ module Bio.Pipeline.Download
     ( downloadFiles
     , downloadENCODE
     , downloadENCODE'
-    , downloadData
+    , getUrl
     ) where
 
 import           Bio.Data.Experiment
@@ -19,7 +19,7 @@ import           Control.Lens
 import           Control.Monad
 import qualified Data.ByteString.Char8      as B
 import           Data.Coerce                (coerce)
-import           Data.List                  (nub)
+import           Data.List                  (nub, isPrefixOf)
 import           Data.List.Split            (splitOn)
 import Data.Conduit.Zlib (multiple, ungzip)
 import           Data.Maybe
@@ -27,6 +27,8 @@ import           Data.Singletons
 import qualified Data.Text                  as T
 import           Network.HTTP.Conduit
 import           Shelly                     hiding (FilePath)
+import Network.FTP.Client.Conduit (retr)
+import Network.FTP.Client (withFTP, login)
 
 sraToFastq :: SingI tags
            => FilePath    -- ^ Output directory
@@ -131,11 +133,20 @@ downloadENCODE' acc dir = do
     url = "https://www.encodeproject.org/files/" ++ acc ++ "/@@download"
 {-# INLINE downloadENCODE' #-}
 
-downloadData :: FilePath
+getUrl :: FilePath -> String -> Bool -> IO ()
+getUrl output url unzip
+    | "http" `isPrefixOf` url = httpDownload output url unzip
+    | "ftp" `isPrefixOf` url = do
+        let (_, url') = T.breakOnEnd "ftp://" (T.pack url)
+            (base, filename) = T.breakOn "/" url'
+        ftpDownload output (T.unpack base) (T.unpack filename) unzip
+    | otherwise = error "Unknown protocol"
+
+httpDownload :: FilePath
              -> String
              -> Bool
              -> IO ()
-downloadData output url unzip = do
+httpDownload output url unzip = do
      request <- parseRequest url
      manager <- newManager tlsManagerSettings
      runResourceT $ do
@@ -144,4 +155,17 @@ downloadData output url unzip = do
   where
     sink | unzip = multiple ungzip .| sinkFileBS output
          | otherwise = sinkFileBS output
-{-# INLINE downloadData #-}
+{-# INLINE httpDownload #-}
+
+ftpDownload :: FilePath
+            -> String
+            -> String
+            -> Bool
+            -> IO ()
+ftpDownload output base filename unzip = withFTP base 21 $ \h _ -> do
+    _ <- login h "anonymous" ""
+    runResourceT $ runConduit $ retr h filename .| sink
+  where
+    sink | unzip = multiple ungzip .| sinkFileBS output
+         | otherwise = sinkFileBS output
+{-# INLINE ftpDownload #-}
