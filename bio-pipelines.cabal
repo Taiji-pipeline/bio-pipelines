@@ -41,6 +41,7 @@ library
     , conduit >= 1.3.0
     , conduit-extra
     , containers
+    , double-conversion
     , data-default
     , exceptions
     , ftp-client

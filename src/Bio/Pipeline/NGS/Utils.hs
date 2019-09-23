@@ -9,14 +9,25 @@
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
-module Bio.Pipeline.NGS.Utils where
+module Bio.Pipeline.NGS.Utils
+    ( filterBam
+    , sortBam
+    , sortBamByName
+    , removeDuplicates
+    , bam2Bed
+    , bam2BedPE
+    , concatBed
+    , bedToBigBed
+    , bedToBigWig
+    ) where
 
 import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
                                               sortedBamToBedPE )
-import           Bio.Data.Bed                (BED, BED3, BEDConvert (..),
-                                              BEDLike (..))
+import           Bio.Data.Bed
+import           Bio.Data.Bed.Types (BED3(..))
 import           Bio.Data.Experiment
 import           Conduit
+import Data.Conduit.Internal (zipSinks)
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
@@ -26,7 +37,10 @@ import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Text                   as T
 import           Shelly  hiding (FilePath)
-import           System.IO.Temp              (withTempDirectory)
+import qualified Data.HashMap.Strict as M
+import Data.Double.Conversion.ByteString (toShortest)
+
+import Bio.Pipeline.Utils
 
 -- | Remove low quality and redundant tags, fill in mate information.
 filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
@@ -35,7 +49,7 @@ filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
           -> FilePath  -- ^ output
           -> File tags 'Bam
           -> IO (File tags' 'Bam)
-filterBam tmpDir output fl = withTempDirectory tmpDir "tmp_filt_dir." $ \tmp -> do
+filterBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ escaping False $ silently $ if isPair
@@ -59,7 +73,7 @@ sortBam :: ( SingI tags, tags' ~ Insert' 'CoordinateSorted
         -> FilePath    -- ^ output
         -> File tags 'Bam
         -> IO (File tags' 'Bam)
-sortBam tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp -> do
+sortBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ silently $ run_ "samtools"
@@ -73,7 +87,7 @@ sortBamByName :: ( SingI tags, tags' ~ Insert' 'NameSorted
               -> FilePath    -- ^ output
               -> File tags 'Bam
               -> IO (File tags' 'Bam)
-sortBamByName tmpDir output fl = withTempDirectory tmpDir "tmp_sort_dir." $ \tmp -> do
+sortBamByName tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ silently $ run_ "samtools"
@@ -149,8 +163,8 @@ bedToBigBed :: Elem 'Gzip tags ~ 'False
             -> File tags 'Bed
             -> IO (File tags 'BigBed)
 bedToBigBed output chrSizes input = shelly $ test_px "bedToBigBed" >>= \case
-    False -> error "Please download: bedToBigBed."
-    True -> withTempDirectory "./" "tmp_dir" $ \dir -> do
+    False -> error "Please download: bedToBigBed"
+    True -> withTempDir (Just "./") $ \dir -> do
         let tmpSort = T.pack $ dir ++ "/tmp_sort.bed"
             tmpChr = T.pack $ dir ++ "/tmp_chr.txt"
         escaping False $ run_ "sort" ["-T", T.pack dir, "-k1,1", "-k2,2n"
@@ -160,3 +174,50 @@ bedToBigBed output chrSizes input = shelly $ test_px "bedToBigBed" >>= \case
         run_ "bedToBigBed" [tmpSort, tmpChr, T.pack output]
         return $ location .~ output $ emptyFile
 {-# INLINE bedToBigBed #-}
+
+-- | Create a bigwig file from a bed file.
+bedToBigWig :: Elem 'Gzip tags ~ 'True
+            => FilePath   -- output
+            -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
+            -> File tags 'Bed
+            -> IO ()
+bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \case
+    False -> error "Please download: bedGraphToBigWig"
+    True -> withTempDir (Just "./") $ \dir -> do
+        let tmp1 = dir ++ "/tmp1"
+            tmp2 = dir ++ "/tmp2"
+            tmpChr = dir ++ "/chr"
+        B.writeFile tmpChr $ B.unlines $
+            map (\(a,b) -> a <> "\t" <> B.pack (show b)) chrSizes
+
+        numReads <- extendBed tmp1 chrSizes $ input^.location
+        shelly $ escaping False $ run_ "sort"
+            ["-k", "1,1", "-k2,2n", T.pack tmp1, ">", T.pack tmp2]
+        mkBedGraph tmp1 tmp2 numReads
+        shelly $ run_ "bedGraphToBigWig" [T.pack tmp1, T.pack tmpChr, T.pack output]
+  where
+    extendBed out chr fl = do
+        (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .|
+            zipSinks lengthC (mapC f .| sinkFileBed out)
+        return n
+      where
+        f :: BED -> BED3
+        f bed = case bed^.strand of
+            Just False -> BED3 (bed^.chrom) (max 0 $ bed^.chromEnd - 100) (bed^.chromEnd)
+            _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
+          where
+            n = M.lookupDefault (error "chr not found") (bed^.chrom) chrSize
+        chrSize = M.fromList chr
+{-# INLINE bedToBigWig #-}
+
+mkBedGraph :: FilePath  -- ^ Output
+           -> FilePath  -- ^ Coordinate sorted bed files
+           -> Int
+           -> IO ()
+mkBedGraph output input nReads = runResourceT $ runConduit $ streamBed input .|
+    mergeSortedBedWith (splitOverlapped length :: [BED3] -> [(BED3, Int)]) .|
+    concatC .| mapC f .| unlinesAsciiC .| sinkFile output
+  where
+    f (bed, x) = toLine bed <> "\t" <> toShortest (fromIntegral x / n)
+    n = fromIntegral nReads / 1000000
+{-# INLINE mkBedGraph #-}
