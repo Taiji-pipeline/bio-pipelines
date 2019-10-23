@@ -75,20 +75,20 @@ filterBamSort :: ( SingI tags
               -> FilePath  -- ^ output
               -> File tags 'Bam
               -> IO (File tags' 'Bam)
-filterBamSort tmpDir output fl = withTempDir (Just tmpDir) $ \tmpDir -> do
+filterBamSort tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
     shelly $ escaping False $ silently $ if isPair
         then bashPipeFail bash_ "samtools"
             [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
             , "samtools", "sort", "-", "-n", "-m", "4G", "-l", "0",
-                "-T", T.pack tmpDir <> "/tmp_sort1", "|"
+                "-T", T.pack tmp <> "/nsrt", "|"
             , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
             , "samtools", "view", "-F", "1804", "-f", "2", "-u", "-", "|"
-            , "samtools", "sort", "-", "-T", T.pack tmpDir <> "/tmp_sort2",
+            , "samtools", "sort", "-", "-T", T.pack tmp <> "/csrt",
                 "-m", "4G", "-l", "9", "-o", T.pack output ]
         else bashPipeFail bash_ "samtools"
             [ "view", "-F", "0x70c", "-q", "30", "-u", input, "|"
-            , "samtools", "sort", "-", "-T", T.pack tmpDir <> "/tmp_sort",
+            , "samtools", "sort", "-", "-T", T.pack tmp <> "/csrt",
                 "-m", "4G", "-l", "9", "-o", T.pack output ]
     return $ location .~ output $ emptyFile
   where
