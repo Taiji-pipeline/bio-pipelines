@@ -58,9 +58,9 @@ filterBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
                 [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
                 , "samtools", "sort", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
                 , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
-                , "samtools", "view", "-F", "1804", "-f", "2", "-1", "-", ">"
+                , "samtools", "view", "-F", "1804", "-f", "2", "-b", "-", ">"
                 , T.pack output ]
-        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-1", input
+        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-b", input
             , ">", T.pack output ]
     return $ location .~ output $ emptyFile
   where

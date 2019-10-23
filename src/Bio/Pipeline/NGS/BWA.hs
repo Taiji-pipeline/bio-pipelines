@@ -72,7 +72,7 @@ bwaAlign output index fastq opt = do
         , "-k", T.pack $ show $ opt^.bwaSeedLen
         , "-t", T.pack $ show $ opt^.bwaCores
         , T.pack index ] ++ inputs ++
-        [ "|", "samtools", "view", "-Su", "-"
+        [ "|", "samtools", "view", "-Sb", "-"
         , ">", T.pack $ output ]
     return $ case fastq of
         Left _ -> Left $ location .~ output $ emptyFile
