@@ -70,14 +70,15 @@ bwaAlign output index fastq opt = do
     shelly $ escaping False $ bashPipeFail bash_ "bwa" $
         [ "mem", "-M"  -- "picard compatibility"
         , "-k", T.pack $ show $ opt^.bwaSeedLen
-        , "-t", T.pack $ show $ opt^.bwaCores
+        , "-t", nCore
         , T.pack index ] ++ inputs ++
-        [ "|", "samtools", "view", "-Sb", "-"
+        [ "|", "samtools", "view", "--threads", nCore, "-Sb", "-"
         , ">", T.pack $ output ]
     return $ case fastq of
         Left _ -> Left $ location .~ output $ emptyFile
         Right _ -> Right $ location .~ output $ emptyFile
   where
+    nCore = T.pack $ show $ opt^.bwaCores
     inputs = case fastq of
         Left f        -> [T.pack $ f^.location]
         Right (f1,f2) -> [T.pack $ f1^.location, T.pack $ f2^.location]

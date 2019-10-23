@@ -11,6 +11,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Bio.Pipeline.NGS.Utils
     ( filterBam
+    , filterBamSort
     , sortBam
     , sortBamByName
     , removeDuplicates
@@ -53,19 +54,47 @@ filterBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ escaping False $ silently $ if isPair
-        then do
-            bashPipeFail bash_ "samtools"
-                [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
-                , "samtools", "sort", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
-                , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
-                , "samtools", "view", "-F", "1804", "-f", "2", "-b", "-", ">"
-                , T.pack output ]
+        then bashPipeFail bash_ "samtools"
+            [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
+            , "samtools", "sort", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
+            , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
+            , "samtools", "view", "-F", "1804", "-f", "2", "-b", "-", ">"
+            , T.pack output ]
         else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-b", input
             , ">", T.pack output ]
     return $ location .~ output $ emptyFile
   where
     isPair = fl `hasTag` PairedEnd
 {-# INLINE filterBam #-}
+
+-- | Remove low quality and redundant tags, fill in mate information.
+-- Finally, sort the bam by coordinate.
+filterBamSort :: ( SingI tags
+                 , tags' ~ Insert' 'CoordinateSorted (Delete 'NameSorted tags) )
+              => FilePath  -- ^ temp dir
+              -> FilePath  -- ^ output
+              -> File tags 'Bam
+              -> IO (File tags' 'Bam)
+filterBamSort tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
+    let input = T.pack $ fl^.location
+        tmp_sort = T.pack $ tmp ++ "/tmp_sort"
+    shelly $ escaping False $ silently $ if isPair
+        then bashPipeFail bash_ "samtools"
+            [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
+            , "samtools", "sort", "-", "-n", "-T", tmp_sort,
+                "-m", "4G", "-l", "0", "|" 
+            , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
+            , "samtools", "view", "-F", "1804", "-f", "2", "-u", "-", "|"
+            , "samtools", "sort", "-", "-T", tmp_sort, "-m", "4G",
+                "-l", "9", "-o", T.pack output ]
+        else bashPipeFail bash_ "samtools"
+            [ "view", "-F", "0x70c", "-q", "30", "-u", input, "|"
+            , "samtools", "sort", "-", "-T", tmp_sort, "-m", "4G",
+                "-l", "9", "-o", T.pack output ]
+    return $ location .~ output $ emptyFile
+  where
+    isPair = fl `hasTag` PairedEnd
+{-# INLINE filterBamSort #-}
 
 sortBam :: ( SingI tags, tags' ~ Insert' 'CoordinateSorted
              (Delete 'NameSorted tags) )
