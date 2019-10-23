@@ -43,7 +43,7 @@ data CallPeakMode = Model
 data CallPeakOpts = CallPeakOpts
     { callPeakOptsTmpDir      :: FilePath
     , callPeakOptsCutoff      :: Cutoff
-    , callPeakOptsGSize       :: String
+    , callPeakOptsGSize       :: Maybe String
     , callPeakOptsMode        :: CallPeakMode
     , callPeakOptsCallSummits :: Bool
     --, callPeakOptsBroad :: Bool
@@ -59,7 +59,7 @@ instance Default CallPeakOpts where
     def = CallPeakOpts
         { callPeakOptsTmpDir = "./"
         , callPeakOptsCutoff = QValue 0.01
-        , callPeakOptsGSize = "mm"
+        , callPeakOptsGSize = Nothing
         , callPeakOptsMode  = Model
         , callPeakOptsCallSummits = False
         --, callPeakOptsBroad = False
@@ -91,11 +91,13 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
     "tmp_macs2_dir." $ \tmp -> shelly $ do
         run_ "macs2" $ [ "callpeak"
             , "-f", T.pack fileformat
-            , "-g", T.pack $ opt^.gSize
             , "--outdir", T.pack tmp
             , "--tempdir", T.pack tmp
             , "--keep-dup", "all"
             , "-t", T.pack target ]
+            ++ ( case opt^.gSize of
+                    Nothing -> []
+                    Just x ->  ["-g", T.pack x] )
             ++ ( case input of
                     Nothing -> []
                     Just x  -> ["-c", T.pack x] )
