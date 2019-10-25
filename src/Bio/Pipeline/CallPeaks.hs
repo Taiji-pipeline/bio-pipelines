@@ -34,7 +34,7 @@ import           Data.List
 import           Data.Ord
 import           Data.Singletons       (SingI)
 import qualified Data.Text             as T
-import           Shelly                (fromText, mv, run_, shelly)
+import           Shelly                (fromText, cp, run_, shelly)
 import           System.IO.Temp        (withTempDirectory)
 
 data CallPeakMode = Model
@@ -110,7 +110,7 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
                     NoModel shift ext ->
                         [ "--nomodel", "--shift", T.pack $ show shift
                         , "--extsize", T.pack $ show ext ] )
-        mv (fromText $ T.pack $ tmp ++ "/NA_peaks.narrowPeak") $ fromText $
+        cp (fromText $ T.pack $ tmp ++ "/NA_peaks.narrowPeak") $ fromText $
             T.pack output
 {-# INLINE macs2 #-}
 
@@ -143,7 +143,7 @@ idrMultiple peakFiles merged th output =
             n <- numLine $ result^.location
             return (result^.location, n)
         let final = fst $ maximumBy (comparing snd) peaks
-        shelly $ mv (fromText $ T.pack final) $ fromText $ T.pack output
+        shelly $ cp (fromText $ T.pack final) $ fromText $ T.pack output
         return $ location .~ output $ emptyFile
   where
     numLine x = do
