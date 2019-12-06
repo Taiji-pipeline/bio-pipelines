@@ -219,7 +219,7 @@ bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \cas
             map (\(a,b) -> a <> "\t" <> B.pack (show b)) chrSizes
 
         numReads <- extendBed tmp1 chrSizes $ input^.location
-        shelly $ escaping False $ run_ "sort"
+        shelly $ setenv "LC_COLLATE" "C" $ escaping False $ run_ "sort"
             ["-k", "1,1", "-k2,2n", T.pack tmp1, ">", T.pack tmp2]
         mkBedGraph tmp1 tmp2 numReads
         shelly $ run_ "bedGraphToBigWig" [T.pack tmp1, T.pack tmpChr, T.pack output]

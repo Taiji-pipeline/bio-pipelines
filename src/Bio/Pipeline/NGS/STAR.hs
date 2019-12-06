@@ -66,7 +66,7 @@ starMkIndex star dir fstqs anno r = do
             mkdir_p $ fromText $ T.pack dir
             liftIO $ hPutStrLn stderr "Generating STAR indices"
             run_ (fromText $ T.pack star) $
-                [ "--runThreadN", "1", "--runMode", "genomeGenerate", "--genomeDir"
+                [ "--runThreadN", "4", "--runMode", "genomeGenerate", "--genomeDir"
                 , T.pack dir, "--genomeFastaFiles" ] ++ map T.pack fstqs ++
                 ["--sjdbGTFfile", T.pack anno, "--sjdbOverhang", T.pack $ show r]
             touchfile $ fromText $ T.pack $ dir ++ stamp
