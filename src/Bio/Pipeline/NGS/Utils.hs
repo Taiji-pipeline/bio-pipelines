@@ -227,8 +227,8 @@ bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \cas
         shelly $ run_ "bedGraphToBigWig" [T.pack tmp1, T.pack tmpChr, T.pack output]
   where
     extendBed out chr fl = do
-        (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .|
-            zipSinks lengthC (mapC f .| sinkFileBed out)
+        (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .| mapC f .|
+            zipSinks (mapC size .| sumC) (sinkFileBed out)
         return n
       where
         f :: BED -> BED3
@@ -245,7 +245,7 @@ mkBedGraph :: FilePath  -- ^ Output
            -> Int
            -> IO ()
 mkBedGraph output input nReads = runResourceT $ runConduit $ streamBed input .|
-    mergeSortedBedWith (splitOverlapped length :: [BED3] -> [(BED3, Int)]) .|
+    mergeSortedBedWith (countOverlapped :: [BED3] -> [(BED3, Int)]) .|
     concatC .| mapC f .| unlinesAsciiC .| sinkFile output
   where
     f (bed, x) = toLine bed <> "\t" <> toShortest (fromIntegral x / n)
