@@ -207,9 +207,10 @@ bedToBigBed output chrSizes input = shelly $ test_px "bedToBigBed" >>= \case
 bedToBigWig :: Elem 'Gzip tags ~ 'True
             => FilePath   -- output
             -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
+            -> [BED3]  -- ^ Blacklist regions
             -> File tags 'Bed
             -> IO ()
-bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \case
+bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig") >>= \case
     False -> error "Please download: bedGraphToBigWig"
     True -> withTempDir (Just "./") $ \dir -> do
         let tmp1 = dir ++ "/tmp1"
@@ -226,8 +227,10 @@ bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \cas
         mkBedGraph tmp1 tmp2 numReads
         shelly $ run_ "bedGraphToBigWig" [T.pack tmp1, T.pack tmpChr, T.pack output]
   where
+    blacklist' = bedToTree const $ zip blacklist $ repeat ()
     extendBed out chr fl = do
-        (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .| mapC f .|
+        (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .|
+            filterC (isIntersected blacklist') .| mapC f .|
             zipSinks (mapC size .| sumC) (sinkFileBed out)
         return n
       where
@@ -236,7 +239,9 @@ bedToBigWig output chrSizes input = shelly (test_px "bedGraphToBigWig") >>= \cas
             Just False -> BED3 (bed^.chrom) (max 0 $ bed^.chromEnd - 100) (bed^.chromEnd)
             _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
           where
-            n = M.lookupDefault (error "chr not found") (bed^.chrom) chrSize
+            n = M.lookupDefault
+                (error $ "CHR not found: " <> B.unpack (bed^.chrom))
+                (bed^.chrom) chrSize
         chrSize = M.fromList chr
 {-# INLINE bedToBigWig #-}
 
