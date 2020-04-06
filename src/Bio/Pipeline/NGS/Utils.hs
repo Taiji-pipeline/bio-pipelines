@@ -230,7 +230,7 @@ bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig"
     blacklist' = bedToTree const $ zip blacklist $ repeat ()
     extendBed out chr fl = do
         (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .|
-            filterC (isIntersected blacklist') .| mapC f .|
+            filterC (not . isIntersected blacklist') .| mapC f .|
             zipSinks (mapC size .| sumC) (sinkFileBed out)
         return n
       where
