@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 module Bio.Pipeline.NGS.RSEM
@@ -19,7 +20,7 @@ import           Data.Int                 (Int32)
 import           Data.Singletons          (SingI)
 import qualified Data.Text                as T
 import           Shelly                   (fromText, mkdir_p, run_, shelly,
-                                           test_f, touchfile)
+                                           test_f)
 import           System.FilePath          (takeDirectory)
 import           System.IO                (hPutStrLn, stderr)
 
@@ -28,19 +29,20 @@ rsemMkIndex :: FilePath   -- ^ Prefix
             -> [FilePath] -- ^ fastq files
             -> IO FilePath
 rsemMkIndex prefix anno fstqs = do
-    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
-    if fileExist
-        then hPutStrLn stderr "RSEM index directory exists. Skipped."
-        else shelly $ do
+    indexExist >>= \case
+        True -> hPutStrLn stderr "RSEM index directory exists. Skipped."
+        False -> shelly $ do
             mkdir_p $ fromText $ T.pack dir
             liftIO $ hPutStrLn stderr "Generating RSEM indices"
             run_ "rsem-prepare-reference" [ "--gtf", T.pack anno
                 , T.intercalate "," $ map T.pack fstqs, T.pack prefix ]
-            touchfile $ fromText $ T.pack $ dir ++ stamp
     return prefix
   where
     dir = takeDirectory prefix
-    stamp = "/.bio_pipelines_rsem_index"
+    indexExist = shelly $ fmap and $ forM exts $ \ext ->
+        test_f $ fromText $ T.pack $ prefix <> ext
+      where
+        exts = [".idx.fa", ".seq"]
 
 data RSEMOpts = RSEMOpts
     { _rsemPath  :: FilePath

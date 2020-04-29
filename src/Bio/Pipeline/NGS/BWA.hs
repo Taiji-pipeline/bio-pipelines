@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
@@ -20,7 +21,7 @@ import           Control.Monad.State.Lazy
 import           Data.Singletons.Prelude.List (Delete)
 import qualified Data.Text                   as T
 import           Shelly                      (cp, escaping, fromText, mkdir_p,
-                                              run_, shelly, test_f, touchfile,
+                                              run_, shelly, test_f,
                                               bashPipeFail, bash_)
 import           System.FilePath             (takeDirectory)
 import           System.IO                   (hPutStrLn, stderr)
@@ -44,20 +45,21 @@ defaultBWAOpts = BWAOpts
 bwaMkIndex :: FilePath
            -> FilePath   -- ^ Index prefix, e.g., /path/genome.fa
            -> IO FilePath
-bwaMkIndex input prefix = do
-    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
-    if fileExist
-        then hPutStrLn stderr "BWA index exists. Skipped."
-        else shelly $ do
+bwaMkIndex input idx = do
+    indexExist >>= \case
+        True -> hPutStrLn stderr "BWA index exists. Skipped."
+        False -> shelly $ do
             mkdir_p $ fromText $ T.pack dir
-            cp (fromText $ T.pack input) $ fromText $ T.pack prefix
             liftIO $ hPutStrLn stderr "Generating BWA index"
-            run_ "bwa" ["index", "-p", T.pack prefix, "-a", "bwtsw", T.pack input]
-            touchfile $ fromText $ T.pack $ dir ++ stamp
-    return prefix
+            cp (fromText $ T.pack input) $ fromText $ T.pack idx
+            run_ "bwa" ["index", "-p", T.pack idx, "-a", "bwtsw", T.pack input]
+    return idx
   where
-    dir = takeDirectory prefix
-    stamp = "/.bio_pipelines_bwa_index"
+    dir = takeDirectory idx
+    indexExist = shelly $ fmap and $ forM exts $ \ext ->
+        test_f $ fromText $ T.pack $ idx <> ext
+      where
+        exts = ["", ".amb", ".ann", ".bwt", ".pac", ".sa"]
 
 bwaAlign :: FilePath  -- ^ Path for the output bam file
          -> FilePath  -- ^ Genome index

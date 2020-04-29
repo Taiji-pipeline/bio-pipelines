@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -25,7 +26,7 @@ import           Data.Singletons.Prelude.List (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
 import           Shelly                      (fromText, mkdir_p, mv, run_,
-                                              shelly, test_f, touchfile)
+                                              shelly, test_f)
 import           System.IO                   (hPutStrLn, stderr)
 import           System.IO.Temp              (withTempDirectory)
 
@@ -58,21 +59,23 @@ starMkIndex :: FilePath   -- ^ STAR command path
                           -- constructing the splice junctions database. Set it
                           -- to "ReadLength-1" or 100 for general purpose.
             -> IO FilePath
-starMkIndex star dir fstqs anno r = do
-    fileExist <- shelly $ test_f $ fromText $ T.pack $ dir ++ stamp
-    if fileExist
-        then hPutStrLn stderr "STAR index directory exists. Skipped."
-        else shelly $ do
-            mkdir_p $ fromText $ T.pack dir
+starMkIndex star idx fstqs anno r = do
+    indexExist >>= \case
+        True -> hPutStrLn stderr "STAR index directory exists. Skipped."
+        False -> shelly $ do
+            mkdir_p $ fromText $ T.pack idx
             liftIO $ hPutStrLn stderr "Generating STAR indices"
             run_ (fromText $ T.pack star) $
                 [ "--runThreadN", "4", "--runMode", "genomeGenerate", "--genomeDir"
-                , T.pack dir, "--genomeFastaFiles" ] ++ map T.pack fstqs ++
+                , T.pack idx, "--genomeFastaFiles" ] ++ map T.pack fstqs ++
                 ["--sjdbGTFfile", T.pack anno, "--sjdbOverhang", T.pack $ show r]
-            touchfile $ fromText $ T.pack $ dir ++ stamp
-    return dir
+    return idx
   where
-    stamp = "/.bio_pipelines_star_index"
+    indexExist = shelly $ fmap and $ forM exts $ \ext ->
+        test_f $ fromText $ T.pack $ idx <> ext
+      where
+        exts = ["chrLength.txt", "chrName.txt", "chrStart.txt"
+            , "Genome", "genomeParameters.txt", "SA", "SAindex"]
 
 -- | Align RNA-seq raw reads with STAR
 starAlign :: ( SingI tags
