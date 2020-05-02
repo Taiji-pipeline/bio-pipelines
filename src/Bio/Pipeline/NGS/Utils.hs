@@ -39,7 +39,9 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.Text                   as T
 import           Shelly  hiding (FilePath)
 import qualified Data.HashMap.Strict as M
+import qualified Data.Map.Strict as Map
 import Data.Double.Conversion.ByteString (toShortest)
+import Data.Char (isDigit)
 
 import Bio.Pipeline.Utils
 
@@ -131,8 +133,17 @@ removeDuplicates :: Elem 'CoordinateSorted tags ~ 'True
 removeDuplicates output input = shelly $ do
     _ <- run "samtools" [ "markdup", T.pack $ input^.location
         , T.pack output, "-r", "-s" ]
-    qc <- lastStderr
-    return $ info .~ [("QC", qc)] $ location .~ output $ emptyFile
+    qc <- Map.fromList . parseQC <$> lastStderr
+    return $ info .~ qc $ location .~ output $ emptyFile
+  where
+    parseQC = concatMap (parse . T.filter (/=':')) . filter (not . T.null) . T.lines
+      where
+        parse x =
+            let (key, txt) = T.break isDigit x
+                (val, rest) = T.span isDigit txt
+            in if T.null val
+                then []
+                else (T.toUpper $ T.strip key, val) : parse rest
 {-# INLINE removeDuplicates #-}
 
 bam2Bed :: FilePath
