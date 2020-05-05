@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Bio.Pipeline.Download
@@ -37,9 +38,48 @@ sraToFastq :: SingI tags
                          (File '[Gzip] 'Fastq, File '[Gzip] 'Fastq)
                  )
 sraToFastq outDir input = if input `hasTag` PairedEnd
-    then Right <$> fastqDumpPair input
-    else Left <$> fastqDump input
+    then Right <$> dumFqPair input
+    else Left <$> dumpFq input
   where
+    dumpFq fl = hasFasterqDump >>= \case
+        True -> fasterqDump fl
+        False -> fastqDump fl
+    dumFqPair fl = hasFasterqDump >>= \case
+        True -> fasterqDumpPair fl
+        False -> fastqDumpPair fl
+    hasFasterqDump = shelly $ test_px "fasterq-dump" >>= \case
+        True -> return True
+        False -> test_px "fastq-dump" >>= \case
+            True -> return False
+            False -> error "Please install sra-tools: https://github.com/ncbi/sra-tools"
+    fasterqDump fl = do
+        let f1_name = outDir ++ "/" ++ fl^.location ++ ".fastq.gz"
+            f1 = location .~ f1_name $ fl
+        outputs <- forM (splitOn "+" $ fl^.location) $ \f -> do
+            let output = T.pack $ outDir ++ "/" ++ f ++ ".fastq"
+            shelly $ run_ "fasterq-dump" ["-O", T.pack outDir, T.pack f]
+            return output
+        shelly $ escaping False $ do
+            run_ "cat" $ outputs ++ ["|", "gzip", "-c", ">", T.pack f1_name]
+            run_ "rm" outputs
+        return (coerce f1 :: File '[Gzip] 'Fastq)
+    fasterqDumpPair fl = do
+        let f1_name = outDir ++ "/" ++ fl^.location ++ "_1.fastq.gz"
+            f2_name = outDir ++ "/" ++ fl^.location ++ "_2.fastq.gz"
+        (outputs1, outputs2, outputs3) <- fmap unzip3 $ forM (splitOn "+" $ fl^.location) $ \f -> do
+            let f1 = T.pack $ outDir ++ "/" ++ f ++ "_1.fastq"
+                f2 = T.pack $ outDir ++ "/" ++ f ++ "_2.fastq"
+                f3 = T.pack $ outDir ++ "/" ++ f ++ "_3.fastq"
+            shelly $ run_ "fasterq-dump" ["-O", T.pack outDir, T.pack f]
+            return (f1,f2,f3)
+        shelly $ escaping False $ do
+            run_ "cat" $ outputs1 ++ ["|", "gzip", "-c", ">", T.pack f1_name]
+            run_ "rm" outputs1
+            run_ "cat" $ outputs2 ++ ["|", "gzip", "-c", ">", T.pack f2_name]
+            run_ "rm" outputs2
+            run_ "rm" outputs3
+        return ( (coerce (location .~ f1_name $ fl) :: File '[Gzip] 'Fastq)
+               , (coerce (location .~ f2_name $ fl) :: File '[Gzip] 'Fastq) )
     fastqDump fl = do
         let f1_name = outDir ++ "/" ++ fl^.location ++ ".fastq.gz"
             f1 = location .~ f1_name $ fl
