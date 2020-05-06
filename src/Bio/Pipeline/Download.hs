@@ -66,18 +66,16 @@ sraToFastq outDir input = if input `hasTag` PairedEnd
     fasterqDumpPair fl = do
         let f1_name = outDir ++ "/" ++ fl^.location ++ "_1.fastq.gz"
             f2_name = outDir ++ "/" ++ fl^.location ++ "_2.fastq.gz"
-        (outputs1, outputs2, outputs3) <- fmap unzip3 $ forM (splitOn "+" $ fl^.location) $ \f -> do
+        (outputs1, outputs2) <- fmap unzip $ forM (splitOn "+" $ fl^.location) $ \f -> do
             let f1 = T.pack $ outDir ++ "/" ++ f ++ "_1.fastq"
                 f2 = T.pack $ outDir ++ "/" ++ f ++ "_2.fastq"
-                f3 = T.pack $ outDir ++ "/" ++ f ++ "_3.fastq"
-            shelly $ run_ "fasterq-dump" ["-O", T.pack outDir, T.pack f]
-            return (f1,f2,f3)
+            shelly $ run_ "fasterq-dump" ["--split-files", "-O", T.pack outDir, T.pack f]
+            return (f1,f2)
         shelly $ escaping False $ do
             run_ "cat" $ outputs1 ++ ["|", "gzip", "-c", ">", T.pack f1_name]
             run_ "rm" outputs1
             run_ "cat" $ outputs2 ++ ["|", "gzip", "-c", ">", T.pack f2_name]
             run_ "rm" outputs2
-            run_ "rm" outputs3
         return ( (coerce (location .~ f1_name $ fl) :: File '[Gzip] 'Fastq)
                , (coerce (location .~ f2_name $ fl) :: File '[Gzip] 'Fastq) )
     fastqDump fl = do
