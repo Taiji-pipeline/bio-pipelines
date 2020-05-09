@@ -31,13 +31,16 @@ import           Shelly                     hiding (FilePath)
 import Network.FTP.Client.Conduit (retr)
 import Network.FTP.Client (withFTP, login)
 
+import Bio.Pipeline.Utils (withTempDir)
+
 sraToFastq :: SingI tags
            => FilePath    -- ^ Output directory
+           -> FilePath    -- ^ temp dir
            -> File tags 'SRA
            -> IO (Either (File '[Gzip] 'Fastq)
                          (File '[Gzip] 'Fastq, File '[Gzip] 'Fastq)
                  )
-sraToFastq outDir input = if input `hasTag` PairedEnd
+sraToFastq outDir temp input = if input `hasTag` PairedEnd
     then Right <$> dumFqPair input
     else Left <$> dumpFq input
   where
@@ -52,24 +55,26 @@ sraToFastq outDir input = if input `hasTag` PairedEnd
         False -> test_px "fastq-dump" >>= \case
             True -> return False
             False -> error "Please install sra-tools: https://github.com/ncbi/sra-tools"
-    fasterqDump fl = do
+    fasterqDump fl = withTempDir (Just temp) $ \tmpDir -> do
         let f1_name = outDir ++ "/" ++ fl^.location ++ ".fastq.gz"
             f1 = location .~ f1_name $ fl
         outputs <- forM (splitOn "+" $ fl^.location) $ \f -> do
             let output = T.pack $ outDir ++ "/" ++ f ++ ".fastq"
-            shelly $ run_ "fasterq-dump" ["-O", T.pack outDir, T.pack f]
+            shelly $ run_ "fasterq-dump"
+                ["-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir]
             return output
         shelly $ escaping False $ do
             run_ "cat" $ outputs ++ ["|", "gzip", "-c", ">", T.pack f1_name]
             run_ "rm" outputs
         return (coerce f1 :: File '[Gzip] 'Fastq)
-    fasterqDumpPair fl = do
+    fasterqDumpPair fl = withTempDir (Just temp) $ \tmpDir -> do
         let f1_name = outDir ++ "/" ++ fl^.location ++ "_1.fastq.gz"
             f2_name = outDir ++ "/" ++ fl^.location ++ "_2.fastq.gz"
         (outputs1, outputs2) <- fmap unzip $ forM (splitOn "+" $ fl^.location) $ \f -> do
             let f1 = T.pack $ outDir ++ "/" ++ f ++ "_1.fastq"
                 f2 = T.pack $ outDir ++ "/" ++ f ++ "_2.fastq"
-            shelly $ run_ "fasterq-dump" ["--split-files", "-O", T.pack outDir, T.pack f]
+            shelly $ run_ "fasterq-dump"
+                ["--split-files", "-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir]
             return (f1,f2)
         shelly $ escaping False $ do
             run_ "cat" $ outputs1 ++ ["|", "gzip", "-c", ">", T.pack f1_name]
@@ -116,17 +121,18 @@ sraToFastq outDir input = if input `hasTag` PairedEnd
 {-# INLINE sraToFastq #-}
 
 downloadFiles :: FilePath
+              -> FilePath
               -> Either SomeFile (SomeFile, SomeFile)
               -> IO (Either SomeFile (SomeFile, SomeFile))
-downloadFiles outDir (Left (SomeFile fl))
+downloadFiles outDir tempDir (Left (SomeFile fl))
     | getFileType fl == SRA = if fl `hasTag` PairedEnd
         then bimap SomeFile (bimap SomeFile SomeFile) <$>
-            sraToFastq outDir (coerce fl :: File '[PairedEnd] 'SRA)
+            sraToFastq outDir tempDir (coerce fl :: File '[PairedEnd] 'SRA)
         else bimap SomeFile (bimap SomeFile SomeFile) <$>
-            sraToFastq outDir (coerce fl :: File '[] 'SRA)
+            sraToFastq outDir tempDir (coerce fl :: File '[] 'SRA)
     | fl `hasTag` ENCODE = Left <$> downloadENCODE outDir (SomeFile fl)
     | otherwise = return $ Left $ SomeFile fl
-downloadFiles outDir (Right (SomeFile f1, SomeFile f2))
+downloadFiles outDir _ (Right (SomeFile f1, SomeFile f2))
     | f1 `hasTag` ENCODE && f2 `hasTag` ENCODE = do
         f1' <- downloadENCODE outDir (SomeFile f1)
         f2' <- downloadENCODE outDir (SomeFile f2)
