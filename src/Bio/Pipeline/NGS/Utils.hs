@@ -241,18 +241,16 @@ bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig"
     blacklist' = bedToTree const $ zip blacklist $ repeat ()
     extendBed out chr fl = do
         (n, _) <- runResourceT $ runConduit $ streamBedGzip fl .|
-            filterC (not . isIntersected blacklist') .| mapC f .|
+            filterC (not . isIntersected blacklist') .| concatMapC f .|
             zipSinks (mapC size .| sumC) (sinkFileBed out)
         return n
       where
-        f :: BED -> BED3
-        f bed = case bed^.strand of
-            Just False -> BED3 (bed^.chrom) (max 0 $ bed^.chromEnd - 100) (bed^.chromEnd)
-            _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
-          where
-            n = M.lookupDefault
-                (error $ "CHR not found: " <> B.unpack (bed^.chrom))
-                (bed^.chrom) chrSize
+        f :: BED -> Maybe BED3
+        f bed = case M.lookup (bed^.chrom) chrSize of
+            Nothing -> Nothing
+            Just n -> case bed^.strand of
+                Just False -> BED3 (bed^.chrom) (max 0 $ bed^.chromEnd - 100) (bed^.chromEnd)
+                _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
         chrSize = M.fromList chr
 {-# INLINE bedToBigWig #-}
 

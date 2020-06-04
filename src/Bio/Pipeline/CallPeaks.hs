@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedLists        #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Bio.Pipeline.CallPeaks
     ( CallPeakOpts(..)
@@ -34,7 +35,7 @@ import           Data.List
 import           Data.Ord
 import           Data.Singletons       (SingI)
 import qualified Data.Text             as T
-import           Shelly                (fromText, cp, run_, shelly)
+import           Shelly                (escaping, fromText, cp, run_, shelly)
 import           System.IO.Temp        (withTempDirectory)
 
 data CallPeakMode = Model
@@ -72,14 +73,21 @@ callPeaks :: SingI tags
           -> File tags 'Bed            -- ^ Sample
           -> Maybe (File tags 'Bed)    -- ^ Input/control sample
           -> CallPeakOpts              -- ^ Options
-          -> IO (File '[] 'NarrowPeak)
-callPeaks output target input opt = do
-    macs2 output (target^.location) (fmap (^.location) input)
-        fileFormat opt
-    return $ location .~ output $ emptyFile
+          -> IO (File '[Gzip] 'NarrowPeak)
+callPeaks output target input opt = runResourceT
+    (runConduit $ streamer .| nullC) >>= \case
+        True -> error "Call peaks failed because the input BED file is empty"
+        False -> do
+            macs2 output (target^.location) (fmap (^.location) input)
+                fileFormat opt
+            return $ location .~ output $ emptyFile
   where
     fileFormat | target `hasTag` PairedEnd = "BEDPE"
                | otherwise = "BED"
+    streamer :: ConduitT () Bed.BED3 (ResourceT IO) ()
+    streamer = if target `hasTag` Gzip
+        then Bed.streamBedGzip (target^.location)
+        else Bed.streamBed (target^.location)
 
 macs2 :: FilePath        -- ^ Output
       -> FilePath        -- ^ Target
@@ -110,8 +118,8 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
                     NoModel shift ext ->
                         [ "--nomodel", "--shift", T.pack $ show shift
                         , "--extsize", T.pack $ show ext ] )
-        cp (fromText $ T.pack $ tmp ++ "/NA_peaks.narrowPeak") $ fromText $
-            T.pack output
+        escaping False $ run_ "cat" [T.pack $ tmp ++ "/NA_peaks.narrowPeak", "|",
+            "gzip", "-c", ">", T.pack output]
 {-# INLINE macs2 #-}
 
 -- | Fraction of reads in peaks
