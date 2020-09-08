@@ -17,6 +17,7 @@ module Bio.Pipeline.CallPeaks
     , gSize
     , mode
     , callSummits
+    , genSignal
     , callPeaks
     , frip
     , idr
@@ -47,6 +48,7 @@ data CallPeakOpts = CallPeakOpts
     , callPeakOptsGSize       :: Maybe String
     , callPeakOptsMode        :: CallPeakMode
     , callPeakOptsCallSummits :: Bool
+    , callPeakOptsGenSignal   :: Bool
     --, callPeakOptsBroad :: Bool
     --, callPeakOptsBroadCutoff :: Double
     }
@@ -63,6 +65,7 @@ instance Default CallPeakOpts where
         , callPeakOptsGSize = Nothing
         , callPeakOptsMode  = Model
         , callPeakOptsCallSummits = False
+        , callPeakOptsGenSignal = False
         --, callPeakOptsBroad = False
         --, callPeakOptsBroadCutoff = 0.05
         }
@@ -118,8 +121,14 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
                     NoModel shift ext ->
                         [ "--nomodel", "--shift", T.pack $ show shift
                         , "--extsize", T.pack $ show ext ] )
+            ++ (if opt^.genSignal then ["-B", "--SPMR"] else [])
         escaping False $ run_ "cat" [T.pack $ tmp ++ "/NA_peaks.narrowPeak", "|",
             "gzip", "-c", ">", T.pack output]
+        when (opt^.genSignal) $ do
+            let treatBdg = T.pack $ tmp ++ "/NA_treat_pileup.bdg"
+                ctrlBdg = T.pack $ tmp ++ "/NA_control_lambda.bdg"
+            shelly $ run_ "macs2" ["bdgcmp", "-t", treatBdg, "-c", ctrlBdg,
+                "-m", "FE", "-o", T.pack $ output <> ".bdg"]
 {-# INLINE macs2 #-}
 
 -- | Fraction of reads in peaks

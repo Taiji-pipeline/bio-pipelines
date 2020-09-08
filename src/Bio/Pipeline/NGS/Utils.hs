@@ -20,12 +20,14 @@ module Bio.Pipeline.NGS.Utils
     , concatBed
     , bedToBigBed
     , bedToBigWig
+    , bedGraphToBigWig
     ) where
 
 import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
                                               sortedBamToBedPE )
 import           Bio.Data.Bed
 import           Bio.Data.Bed.Types (BED3(..))
+import           Bio.Data.Bed.Utils (clipBed)
 import           Bio.Data.Experiment
 import           Conduit
 import Data.Conduit.Internal (zipSinks)
@@ -214,16 +216,44 @@ bedToBigBed output chrSizes input = shelly $ test_px "bedToBigBed" >>= \case
         return $ location .~ output $ emptyFile
 {-# INLINE bedToBigBed #-}
 
+-- | Create a bigwig file from a bedgraph file.
+bedGraphToBigWig :: FilePath   -- output
+                 -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
+                 -> [BED3]  -- ^ Blacklist regions
+                 -> FilePath
+                 -> FilePath  -- ^ Input
+                 -> IO ()
+bedGraphToBigWig output chrSizes blacklist tmpdir input = shelly (test_px "bedGraphToBigWig") >>= \case
+    False -> error "Please download: bedGraphToBigWig"
+    True -> withTempDir (Just tmpdir) $ \dir -> do
+        let tmp1 = dir ++ "/tmp1"
+            tmp2 = dir ++ "/tmp2"
+            tmpChr = dir ++ "/chr"
+        B.writeFile tmpChr $ B.unlines $
+            map (\(a,b) -> a <> "\t" <> B.pack (show b)) chrSizes
+        runResourceT $ runConduit $ streamBed input .|
+            filterC (\x -> not $ isIntersected blacklist' (x :: BEDGraph)) .|
+            clipBed chrSizes .| sinkFileBed tmp1
+        shelly $ do
+            setenv "LC_COLLATE" "C"
+            escaping False $ run_ "sort"
+                ["-S", "4G", "-k", "1,1", "-k2,2n", T.pack tmp1, ">", T.pack tmp2]
+        shelly $ run_ "bedGraphToBigWig" [T.pack tmp2, T.pack tmpChr, T.pack output]
+  where
+    blacklist' = bedToTree const $ zip blacklist $ repeat ()
+{-# INLINE bedGraphToBigWig #-}
+
 -- | Create a bigwig file from a bed file.
 bedToBigWig :: Elem 'Gzip tags ~ 'True
             => FilePath   -- output
             -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
             -> [BED3]  -- ^ Blacklist regions
+            -> FilePath
             -> File tags 'Bed
             -> IO ()
-bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig") >>= \case
+bedToBigWig output chrSizes blacklist tmpdir input = shelly (test_px "bedGraphToBigWig") >>= \case
     False -> error "Please download: bedGraphToBigWig"
-    True -> withTempDir (Just "./") $ \dir -> do
+    True -> withTempDir (Just tmpdir) $ \dir -> do
         let tmp1 = dir ++ "/tmp1"
             tmp2 = dir ++ "/tmp2"
             tmpChr = dir ++ "/chr"
@@ -234,7 +264,7 @@ bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig"
         shelly $ do
             setenv "LC_COLLATE" "C"
             escaping False $ run_ "sort"
-                ["-k", "1,1", "-k2,2n", T.pack tmp1, ">", T.pack tmp2]
+                ["-S", "4G", "-k", "1,1", "-k2,2n", T.pack tmp1, ">", T.pack tmp2]
         mkBedGraph tmp1 tmp2 numReads
         shelly $ run_ "bedGraphToBigWig" [T.pack tmp1, T.pack tmpChr, T.pack output]
   where
