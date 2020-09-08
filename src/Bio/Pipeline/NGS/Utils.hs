@@ -248,7 +248,7 @@ bedToBigWig output chrSizes blacklist input = shelly (test_px "bedGraphToBigWig"
         f :: BED -> Maybe BED3
         f bed = case M.lookup (bed^.chrom) chrSize of
             Nothing -> Nothing
-            Just n -> case bed^.strand of
+            Just n -> Just $ case bed^.strand of
                 Just False -> BED3 (bed^.chrom) (max 0 $ bed^.chromEnd - 100) (bed^.chromEnd)
                 _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
         chrSize = M.fromList chr
