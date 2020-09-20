@@ -30,13 +30,13 @@ import           Conduit
 import           Control.Lens
 import           Control.Monad
 import qualified Data.ByteString.Char8 as B
-import           Data.Conduit.Zlib     (ungzip)
+import           Data.Conduit.Zlib     (gzip, ungzip)
 import           Data.Default          (Default (..))
 import           Data.List
 import           Data.Ord
 import           Data.Singletons       (SingI)
 import qualified Data.Text             as T
-import           Shelly                (escaping, fromText, cp, run_, shelly)
+import           Shelly                (fromText, cp, run_, shelly)
 import           System.IO.Temp        (withTempDirectory)
 
 data CallPeakMode = Model
@@ -122,8 +122,8 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
                         [ "--nomodel", "--shift", T.pack $ show shift
                         , "--extsize", T.pack $ show ext ] )
             ++ (if opt^.genSignal then ["-B", "--SPMR"] else [])
-        escaping False $ run_ "cat" [T.pack $ tmp ++ "/NA_peaks.narrowPeak", "|",
-            "gzip", "-c", ">", T.pack output]
+        liftIO $ runResourceT $ runConduit $
+            sourceFileBS (tmp <> "/NA_peaks.narrowPeak") .| gzip .| sinkFile output
         when (opt^.genSignal) $ do
             let treatBdg = T.pack $ tmp ++ "/NA_treat_pileup.bdg"
                 ctrlBdg = T.pack $ tmp ++ "/NA_control_lambda.bdg"
@@ -145,7 +145,7 @@ frip rs peak = do
         (if rs `hasTag` Gzip then ungzip else mapC id) .| linesUnboundedAsciiC .|
         mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) .| Bed.intersectBed p .|
         lengthC
-    return $ fromIntegral m / fromIntegral n
+    return $ fromIntegral (m :: Int) / fromIntegral (n :: Int)
 
 idrMultiple :: [File tags 'NarrowPeak]   -- ^ Peaks
             -> File tags 'NarrowPeak  -- ^ Merged peaks
