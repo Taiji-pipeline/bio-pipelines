@@ -16,8 +16,7 @@ import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "Test"
-    [ filterBamTest
-    , umiTest
+    [ umiTest
     ]
 
 filterBamTest :: TestTree
@@ -32,13 +31,16 @@ filterBamTest = goldenVsFile "Filter BAM Test" golden output $
     input = "tests/data/pairedend.bam"
 
 umiTest :: TestTree
-umiTest = testCase "UMI" $ sort res @=? sort ans
+umiTest = testGroup "Barcode"
+    [ testCase "conversion" $ map (intToDna . dnaToInt) barcodes @=? barcodes
+    , testCase "mismatch" $ map (\(a,b,_) -> nMismatch (dnaToInt a) (dnaToInt b)) mis @=? map (\(_,_,x) -> x) mis
+    ]
   where
-    res = uniqBarcode umi
-    ans = ["ACGT", "AAAT"]
-    umi = [ ("ACGT", 456)
-          , ("TCGT", 2)
-          , ("AAAT", 90)
-          , ("CCGT", 2)
-          , ("ACAT", 72)
-          , ("ACAG", 1) ]
+    barcodes = ["AAAACCG", "ATCGGA", "CCCAATCC"]
+    mis = [ ("AAAACCG", "AAAACCT", 1)
+          , ("TAAACCG", "AAAACCT", 2)
+          , ("TAAGCCG", "AAAACCT", 3)
+          , ("AAAACCG", "TAAACCG", 1)
+          , ("AAAACCG", "TTTTAAA", 7)
+          , ("CCTGGAA", "CCTGGAA", 0)
+          ]

@@ -1,7 +1,7 @@
 module Bio.Pipeline 
     ( module Bio.Pipeline.Download
     , module Bio.Pipeline.CallPeaks
-    , module Bio.Pipeline.Barcode
+    , module Bio.Pipeline.Demultiplex
     , module Bio.Pipeline.Report
     , module Bio.Pipeline.Utils
     , module Bio.Pipeline.NGS.BWA
@@ -12,7 +12,7 @@ module Bio.Pipeline
 
 import Bio.Pipeline.Download
 import Bio.Pipeline.CallPeaks
-import Bio.Pipeline.Barcode
+import Bio.Pipeline.Demultiplex
 import Bio.Pipeline.Report
 import Bio.Pipeline.Utils
 import Bio.Pipeline.NGS.BWA

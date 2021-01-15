@@ -17,7 +17,7 @@ library
   exposed-modules:
     Bio.Pipeline
     Bio.Pipeline.CallPeaks
-    Bio.Pipeline.Barcode
+    Bio.Pipeline.Demultiplex
     Bio.Pipeline.Utils
     Bio.Pipeline.Instances
     Bio.Pipeline.Download
@@ -58,6 +58,7 @@ library
     , shelly
     , unordered-containers
     , vector
+    , vector-algorithms
     , vector-binary-instances
 
   hs-source-dirs:      src
@@ -66,7 +67,7 @@ library
 test-suite tests
   type: exitcode-stdio-1.0
   hs-source-dirs: tests
-  main-is: Test.hs
+  main-is: tests.hs
   other-modules:
     Test
 
