@@ -293,5 +293,5 @@ mkBedGraph output input nReads = runResourceT $ runConduit $ streamBed input .|
     concatC .| mapC f .| unlinesAsciiC .| sinkFile output
   where
     f (bed, x) = toLine bed <> "\t" <> toShortest (fromIntegral x / n)
-    n = fromIntegral nReads / 1000000
+    n = fromIntegral nReads / 1000000 / 1000
 {-# INLINE mkBedGraph #-}

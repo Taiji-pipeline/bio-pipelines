@@ -7,15 +7,20 @@ module Bio.Pipeline.Demultiplex
     , barcodeStat
     , dnaToInt
     , intToDna
-    --, mkBarcodeMap
+    , genErrorBarcode1
+    , nMismatch
+    , mkBarcodeMap
     ) where
 
 import Bio.Data.Fastq
 import Conduit
+import Data.List
+import Data.List.Ordered
 import Data.Ord
 import qualified Data.ByteString                      as BS
 import qualified Data.ByteString.Char8                as B
 import qualified Data.IntMap.Strict as I
+import qualified Data.IntSet as S
 import qualified Data.Vector.Algorithms.Intro as I
 import qualified Data.Vector.Unboxed as U
 
@@ -65,14 +70,12 @@ dnaToInt = fst . B.foldl' f (0, 1)
 {-# INLINE dnaToInt #-}
 
 -- | Convert decimal to quinary DNA sequence.
-intToDna :: Int   -- ^ length of the resulting bytestring
-         -> Int
-         -> B.ByteString
-intToDna n = B.pack . reverse . go 1 []
+intToDna :: Int -> B.ByteString
+intToDna = B.pack . reverse . go []
   where
-    go !i !acc !x
-        | m == 0 && i >= n = c : acc
-        | otherwise = go (i+1) (c:acc) m
+    go !acc !x
+        | m == 0 = c : acc
+        | otherwise = go (c:acc) m
       where
         c = case x `mod` 5 of
             0 -> 'N'
@@ -84,35 +87,61 @@ intToDna n = B.pack . reverse . go 1 []
         m = x `div` 5
 {-# INLINE intToDna #-}
 
-{-
-mkBarcodeMap :: M.HashMap BarCode Int -> M.HashMap BarCode BarCode
-mkBarcodeMap = mkBarcodeMap' . mkUMINet
-
-mkBarcodeMap' :: G.Gr (BarCode, Int) () -> M.HashMap BarCode BarCode
-mkBarcodeMap' gr = M.fromList $
-    concatMap (f . map (fromJust . G.lab gr)) $ G.components gr
+-- | Generate error barcodes within 1 edit distance to the input barcode.
+genErrorBarcode1 :: Barcode -> [Barcode]
+genErrorBarcode1 bc = map (\(n, i) -> bc + i * 5^n) $ filter ((/=0) . snd) $ go 0 bc
   where
-    f xs = let x = fst $ maximumBy (comparing snd) xs
-           in zip (map fst xs) $ repeat x
-{-# INLINE mkBarcodeMap' #-}
-
--- | Construct UMI network using directional approach.
-mkUMINet :: M.HashMap BarCode Int -> G.Gr (BarCode, Int) ()
-mkUMINet umi = G.mkGraph nds es
-  where
-    es = mapMaybe (uncurry isConnect) $ comb nds
-    nds = zip [0..] $ M.toList umi
-    isConnect (a, (x, c_x)) (b, (y, c_y))
-        | nMismatch x y <= 1 = if c_x >= 2 * c_y - 1 
-          then Just (a, b, ())
-          else if c_y >= 2 * c_x - 1 then Just (b, a, ()) else Nothing
-        | otherwise = Nothing
+    go !acc !x | x' == 0 = res
+               | otherwise = res <> go (acc+1) x'
       where
-    comb (x:xs) = zip (repeat x) xs ++ comb xs
-    comb _ = []
-{-# INLINE mkUMINet #-}
+        res = map (\i -> (acc, i - x `mod` 5)) [0..4]
+        x' = x `div` 5
+{-# INLINE genErrorBarcode1 #-}
 
-nMismatch :: BarCode -> BarCode -> Int
-nMismatch a b = undefined
+nMismatch :: Barcode -> Barcode -> Int
+nMismatch a b = go 0 a b
+  where
+    go !acc !x !y | m1 == 0 && m2 == 0 = acc'
+                  | otherwise = go acc' m1 m2
+      where
+        acc' | x `mod` 5 == y `mod` 5 = acc
+             | otherwise = acc + 1
+        m1 = x `div` 5
+        m2 = y `div` 5
+{-# INLINE nMismatch #-}
 
--}
+mkBarcodeMap :: [Barcode] -> I.IntMap Barcode
+mkBarcodeMap = I.fromList . concatMap f
+  where
+    f x = zip (x : genErrorBarcode1 x) $ repeat x
+{-# INLINE mkBarcodeMap #-}
+
+mkBarcodeMap' :: Double -> U.Vector (Barcode, Int) -> [([Int], Int)]
+mkBarcodeMap' thres input = mkMap $ loop (I.fromList $ zip init $ repeat [])
+    (S.fromList init) (S.fromList $ drop (truncate thres) $ map fst $ U.toList input)
+  where
+    mkMap m = map f $ filter (not . (`S.member` s)) init
+      where
+        s = S.fromList $ concatMap (m I.!) init
+        f i = (nubSort $ go $ m I.! i, i)
+          where
+            go [] = []
+            go xs = xs <> go (nubSort $ concatMap (\k -> I.findWithDefault [] k m) xs)
+    countTable = I.fromList $ U.toList input
+    init = take (truncate thres) $ map fst $ U.toList input
+    loop acc whitelist candidate
+        | S.null whitelist' = acc'
+        | otherwise = loop acc' whitelist' candidate'
+      where
+        acc' = foldl' (\m (k,v) -> I.alter (f v) k m) acc assoc
+          where
+            f v Nothing = Just [v]
+            f v (Just x) = Just $ v : x
+        (assoc, whitelist', candidate') = findMatch whitelist candidate
+    findMatch whitelist candidate = (assoc, whitelist', candidate')
+      where
+        assoc = concatMap (\x -> zip (filter (isConnected x) $ S.toList whitelist) $ repeat x) $ S.toList candidate
+        whitelist' = S.fromList (map snd assoc) S.\\ whitelist
+        candidate' = candidate S.\\ whitelist
+    isConnected child parent = nMismatch child parent <= 1 && 
+        countTable I.! parent >= 2 * countTable I.! child

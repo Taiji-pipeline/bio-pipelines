@@ -7,7 +7,7 @@ module Test
 
 import           Bio.Data.Experiment
 import           Bio.Pipeline.NGS.Utils
-import Bio.Pipeline.Barcode
+import Bio.Pipeline.Demultiplex
 import           Control.Lens
 import           System.IO.Temp
 import           Test.Tasty
@@ -34,6 +34,7 @@ umiTest :: TestTree
 umiTest = testGroup "Barcode"
     [ testCase "conversion" $ map (intToDna . dnaToInt) barcodes @=? barcodes
     , testCase "mismatch" $ map (\(a,b,_) -> nMismatch (dnaToInt a) (dnaToInt b)) mis @=? map (\(_,_,x) -> x) mis
+    , testCase "genErrorBarcode1" $ map (\x -> nMismatch x (dnaToInt "AATCCCGGTTA") == 1) (genErrorBarcode1 (dnaToInt "AATCCCGGTTA")) @=? replicate 44 True
     ]
   where
     barcodes = ["AAAACCG", "ATCGGA", "CCCAATCC"]
