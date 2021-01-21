@@ -44,7 +44,6 @@ library
     , exceptions
     , ftp-client
     , ftp-client-conduit
-    , fgl
     , filepath
     , hashable
     , http-conduit

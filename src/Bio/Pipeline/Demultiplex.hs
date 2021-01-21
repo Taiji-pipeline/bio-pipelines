@@ -91,10 +91,11 @@ intToDna = B.pack . reverse . go []
 genErrorBarcode1 :: Barcode -> [Barcode]
 genErrorBarcode1 bc = map (\(n, i) -> bc + i * 5^n) $ filter ((/=0) . snd) $ go 0 bc
   where
+    go :: Int -> Int -> [(Int, Int)]
     go !acc !x | x' == 0 = res
                | otherwise = res <> go (acc+1) x'
       where
-        res = map (\i -> (acc, i - x `mod` 5)) [0..4]
+        res = map (\i -> (acc, i - x `mod` 5)) [0 .. 4]
         x' = x `div` 5
 {-# INLINE genErrorBarcode1 #-}
 
