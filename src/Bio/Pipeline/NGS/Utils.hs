@@ -48,6 +48,7 @@ import Data.Char (isDigit)
 import Bio.Pipeline.Utils
 
 -- | Remove low quality and redundant tags, fill in mate information.
+-- Use up to two threads.
 filterBam :: ( SingI tags, tags' ~ If (Elem PairedEnd tags)
                (Insert' 'NameSorted (Delete 'CoordinateSorted tags)) tags )
           => FilePath  -- ^ temp dir
@@ -59,12 +60,12 @@ filterBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ escaping False $ silently $ if isPair
         then bashPipeFail bash_ "samtools"
-            [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
-            , "samtools", "sort", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
-            , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
-            , "samtools", "view", "-F", "1804", "-f", "2", "-b", "-", ">"
+            [ "view", "-@", "2", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
+            , "samtools", "sort", "-@", "2", "-", "-n", "-T", tmp_sort, "-m", "4G", "-l", "0", "|" 
+            , "samtools", "fixmate", "-@", "2", "-r", "-m", "-", "-", "|"
+            , "samtools", "view", "-@", "2", "-F", "1804", "-f", "2", "-b", "-", ">"
             , T.pack output ]
-        else run_ "samtools" [ "view", "-F", "0x70c", "-q", "30", "-b", input
+        else run_ "samtools" [ "view", "-@", "2", "-F", "0x70c", "-q", "30", "-b", input
             , ">", T.pack output ]
     return $ location .~ output $ emptyFile
   where
@@ -109,7 +110,7 @@ sortBam tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ silently $ run_ "samtools"
-        [ "sort", input, "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
+        [ "sort", "-@", "2", input, "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
     return $ location .~ output $ emptyFile
 {-# INLINE sortBam #-}
 
@@ -123,7 +124,7 @@ sortBamByName tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
     let input = T.pack $ fl^.location
         tmp_sort = T.pack $ tmp ++ "/tmp_sort"
     shelly $ silently $ run_ "samtools"
-        [ "sort", input, "-n", "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
+        [ "sort", "-@", "2", input, "-n", "-T", tmp_sort, "-l", "9", "-o", T.pack output ]
     return $ location .~ output $ emptyFile
 {-# INLINE sortBamByName #-}
 
