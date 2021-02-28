@@ -72,7 +72,7 @@ starMkIndex star idx fstqs anno r = do
     return idx
   where
     indexExist = shelly $ fmap and $ forM exts $ \ext ->
-        test_f $ fromText $ T.pack $ idx <> ext
+        test_f $ fromText $ T.pack $ idx <> "/" <> ext
       where
         exts = ["chrLength.txt", "chrName.txt", "chrStart.txt"
             , "Genome", "genomeParameters.txt", "SA", "SAindex"]
