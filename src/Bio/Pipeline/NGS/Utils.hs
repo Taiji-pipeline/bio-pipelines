@@ -26,7 +26,6 @@ module Bio.Pipeline.NGS.Utils
 import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
                                               sortedBamToBedPE )
 import           Bio.Data.Bed
-import           Bio.Data.Bed.Types (BED3(..))
 import           Bio.Data.Bed.Utils (clipBed)
 import           Bio.Data.Experiment
 import           Conduit

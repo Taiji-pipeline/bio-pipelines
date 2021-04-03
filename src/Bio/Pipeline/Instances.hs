@@ -49,10 +49,8 @@ $(deriveJSON defaultOptions ''NarrowPeak)
 $(deriveJSON defaultOptions ''PWM)
 $(deriveJSON defaultOptions ''Motif)
 
-deriving instance Generic BED
 instance Binary BED
 
-deriving instance Generic (BEDExt a b)
 instance (Binary a, Binary b) => Binary (BEDExt a b)
 
 instance Binary (MU.Matrix Double)
