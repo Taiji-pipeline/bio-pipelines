@@ -18,6 +18,7 @@ module Bio.Pipeline.CallPeaks
     , mode
     , callSummits
     , genSignal
+    , noLambda
     , callPeaks
     , frip
     , idr
@@ -49,6 +50,7 @@ data CallPeakOpts = CallPeakOpts
     , callPeakOptsMode        :: CallPeakMode
     , callPeakOptsCallSummits :: Bool
     , callPeakOptsGenSignal   :: Bool
+    , callPeakOptsNoLambda    :: Bool
     --, callPeakOptsBroad :: Bool
     --, callPeakOptsBroadCutoff :: Double
     }
@@ -66,6 +68,7 @@ instance Default CallPeakOpts where
         , callPeakOptsMode  = Model
         , callPeakOptsCallSummits = False
         , callPeakOptsGenSignal = False
+        , callPeakOptsNoLambda = False
         --, callPeakOptsBroad = False
         --, callPeakOptsBroadCutoff = 0.05
         }
@@ -122,6 +125,7 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
                         [ "--nomodel", "--shift", T.pack $ show shift
                         , "--extsize", T.pack $ show ext ] )
             ++ (if opt^.genSignal then ["-B", "--SPMR"] else [])
+            ++ (if opt^.noLambda then ["--nolambda"] else [])
         liftIO $ runResourceT $ runConduit $
             sourceFileBS (tmp <> "/NA_peaks.narrowPeak") .| gzip .| sinkFile output
         when (opt^.genSignal) $ do
