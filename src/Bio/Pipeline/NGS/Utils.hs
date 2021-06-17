@@ -80,20 +80,20 @@ filterBamSort :: ( SingI tags
               -> File tags 'Bam
               -> IO (File tags' 'Bam)
 filterBamSort tmpDir output fl = withTempDir (Just tmpDir) $ \tmp -> do
-    let input = T.pack $ fl^.location
-    shelly $ escaping False $ silently $ if isPair
+    let input = escapeFileName $ T.pack $ fl^.location
+    shelly $ silently $ if isPair
         then bashPipeFail bash_ "samtools"
             [ "view", "-f", "2", "-F", "0x70c", "-q", "30", "-u", input, "|"
-            , "samtools", "sort", "-", "-n", "-m", "4G", "-l", "0",
-                "-T", T.pack tmp <> "/nsrt", "|"
+            , "samtools", "sort", "-@", "2", "-", "-n", "-m", "4G", "-l", "0",
+                "-T", escapeFileName $ T.pack tmp <> "/nsrt", "|"
             , "samtools", "fixmate", "-r", "-m", "-", "-", "|"
             , "samtools", "view", "-F", "1804", "-f", "2", "-u", "-", "|"
-            , "samtools", "sort", "-", "-T", T.pack tmp <> "/csrt",
-                "-m", "4G", "-l", "9", "-o", T.pack output ]
+            , "samtools", "sort", "-@", "2", "-", "-T", T.pack tmp <> "/csrt",
+                "-m", "4G", "-l", "9", "-o", escapeFileName $ T.pack output ]
         else bashPipeFail bash_ "samtools"
             [ "view", "-F", "0x70c", "-q", "30", "-u", input, "|"
-            , "samtools", "sort", "-", "-T", T.pack tmp <> "/csrt",
-                "-m", "4G", "-l", "9", "-o", T.pack output ]
+            , "samtools", "sort", "-@", "2", "-", "-T", escapeFileName $ T.pack tmp <> "/csrt",
+                "-m", "4G", "-l", "9", "-o", escapeFileName $ T.pack output ]
     return $ location .~ output $ emptyFile
   where
     isPair = fl `hasTag` PairedEnd
@@ -295,3 +295,7 @@ mkBedGraph output input nReads = runResourceT $ runConduit $ streamBed input .|
     f (bed, x) = toLine bed <> "\t" <> toShortest (fromIntegral x / n)
     n = fromIntegral nReads / 1000000 / 1000
 {-# INLINE mkBedGraph #-}
+
+escapeFileName :: T.Text -> T.Text
+escapeFileName = T.replace "'" "'\"\\'\"'"
+{-# INLINE escapeFileName #-}
