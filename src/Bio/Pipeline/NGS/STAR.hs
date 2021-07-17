@@ -63,16 +63,15 @@ starMkIndex star idx fstqs anno r = do
     indexExist >>= \case
         True -> hPutStrLn stderr "STAR index directory exists. Skipped."
         False -> shelly $ do
-            mkdir_p $ fromText $ T.pack idx
+            mkdir_p idx
             liftIO $ hPutStrLn stderr "Generating STAR indices"
-            run_ (fromText $ T.pack star) $
+            run_ star $
                 [ "--runThreadN", "4", "--runMode", "genomeGenerate", "--genomeDir"
                 , T.pack idx, "--genomeFastaFiles" ] ++ map T.pack fstqs ++
                 ["--sjdbGTFfile", T.pack anno, "--sjdbOverhang", T.pack $ show r]
     return idx
   where
-    indexExist = shelly $ fmap and $ forM exts $ \ext ->
-        test_f $ fromText $ T.pack $ idx <> "/" <> ext
+    indexExist = shelly $ fmap and $ forM exts $ \ext -> test_f $ idx <> "/" <> ext
       where
         exts = ["chrLength.txt", "chrName.txt", "chrStart.txt"
             , "Genome", "genomeParameters.txt", "SA", "SAindex"]
@@ -90,7 +89,7 @@ starAlign :: ( SingI tags
                          (File tags2 'Bam, Maybe (File tags2 'Bam)) )
 starAlign outputGenome index dat opt = withTempDirectory
     (opt^.starTmpDir) "STAR_align_tmp_dir." $ \tmp_dir -> shelly $ do
-        run_ star $ ["--readFilesIn"] ++ map T.pack inputs ++
+        run_ (opt^.starCmd) $ ["--readFilesIn"] ++ map T.pack inputs ++
             ["--genomeDir", T.pack index
             , "--outFileNamePrefix", T.pack $ tmp_dir ++ "/"
             , "--runThreadN",  T.pack $ show $ opt^.starCores
@@ -121,8 +120,7 @@ starAlign outputGenome index dat opt = withTempDirectory
 
         let starOutput | opt^.starSort = "/Aligned.sortedByCoord.out.bam"
                        | otherwise = "/Aligned.out.bam"
-        mv (fromText $ T.pack $ tmp_dir ++ starOutput) $ fromText $
-            T.pack $ outputGenome
+        cp (tmp_dir ++ starOutput) outputGenome
 
         -- Sorting annotation bam
         case opt^.starTranscriptome of
@@ -132,9 +130,7 @@ starAlign outputGenome index dat opt = withTempDirectory
                             , "-T", T.pack $ tmp_dir ++ "/sort_bam_tmp"
                             , "-o", T.pack outputAnno
                             , T.pack $ tmp_dir ++ "/Aligned.toTranscriptome.out.bam" ]
-                    else mv (fromText $ T.pack $ tmp_dir ++
-                            "/Aligned.toTranscriptome.out.bam") $ fromText $
-                            T.pack outputAnno
+                    else cp (tmp_dir ++ "/Aligned.toTranscriptome.out.bam") outputAnno
                 return $ case dat of
                     Left _ -> Left ( location .~ outputGenome $ emptyFile
                                    , Just $ location .~ outputAnno $ emptyFile )
@@ -145,7 +141,6 @@ starAlign outputGenome index dat opt = withTempDirectory
                     Left _ -> Left (location .~ outputGenome $ emptyFile, Nothing)
                     Right _ -> Right (location .~ outputGenome $ emptyFile, Nothing)
   where
-    star = fromText $ T.pack $ opt^.starCmd
     (inputs, zipped) = case dat of
         Left fastq     -> ([fastq^.location], fastq `hasTag` Gzip)
         Right (f1, f2) -> ([f1^.location, f2^.location], f1 `hasTag` Gzip)

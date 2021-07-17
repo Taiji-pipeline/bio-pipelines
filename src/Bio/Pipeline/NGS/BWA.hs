@@ -49,15 +49,14 @@ bwaMkIndex input idx = do
     indexExist >>= \case
         True -> hPutStrLn stderr "BWA index exists. Skipped."
         False -> shelly $ do
-            mkdir_p $ fromText $ T.pack dir
+            mkdir_p dir
             liftIO $ hPutStrLn stderr "Generating BWA index"
-            cp (fromText $ T.pack input) $ fromText $ T.pack idx
+            cp input idx
             run_ "bwa" ["index", "-p", T.pack idx, "-a", "bwtsw", T.pack input]
     return idx
   where
     dir = takeDirectory idx
-    indexExist = shelly $ fmap and $ forM exts $ \ext ->
-        test_f $ fromText $ T.pack $ idx <> ext
+    indexExist = shelly $ fmap and $ forM exts $ \ext -> test_f $ idx <> ext
       where
         exts = ["", ".amb", ".ann", ".bwt", ".pac", ".sa"]
 

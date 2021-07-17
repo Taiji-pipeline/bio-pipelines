@@ -24,6 +24,7 @@ import           Data.List                  (nub, isPrefixOf)
 import           Data.List.Split            (splitOn)
 import Data.Conduit.Zlib (multiple, ungzip)
 import           Data.Maybe
+import Data.Char (toUpper)
 import           Data.Singletons
 import qualified Data.Text                  as T
 import           Network.HTTP.Conduit
@@ -131,13 +132,28 @@ downloadFiles outDir tempDir (Left (SomeFile fl))
         else bimap SomeFile (bimap SomeFile SomeFile) <$>
             sraToFastq outDir tempDir (coerce fl :: File '[] 'SRA)
     | fl `hasTag` ENCODE = Left <$> downloadENCODE outDir (SomeFile fl)
+    | map toUpper (take 4 $ fl^.location) == "URL:" = do
+        let url = T.unpack $ T.strip $ T.pack $ drop 4 $ fl^.location
+            output = outDir <> "/" <> T.unpack (snd $ T.breakOnEnd "/" $ T.pack $ fl^.location)
+            newFile = location .~ output $ fl
+        getUrl output url False
+        return $ Left $ SomeFile newFile
     | otherwise = return $ Left $ SomeFile fl
-downloadFiles outDir _ (Right (SomeFile f1, SomeFile f2))
-    | f1 `hasTag` ENCODE && f2 `hasTag` ENCODE = do
-        f1' <- downloadENCODE outDir (SomeFile f1)
-        f2' <- downloadENCODE outDir (SomeFile f2)
-        return $ Right (f1', f2')
-    | otherwise = return $ Right (SomeFile f1, SomeFile f2)
+downloadFiles outDir _ (Right (f1, f2)) = do
+    f1' <- download f1
+    f2' <- download f2
+    return $ Right (f1', f2')
+  where
+    download (SomeFile fl)
+        | fl `hasTag` ENCODE = downloadENCODE outDir (SomeFile fl)
+        | map toUpper (take 4 $ fl^.location) == "URL:" = do
+            let url = T.unpack $ T.strip $ T.pack $ drop 4 $ fl^.location
+                output = outDir <> "/" <> T.unpack (snd $ T.breakOnEnd "/" $ T.pack $ fl^.location)
+                newFile = location .~ output $ fl
+            getUrl output url False
+            return $ SomeFile newFile
+        | otherwise = return $ SomeFile fl
+ 
 
 downloadENCODE :: FilePath
                -> SomeFile

@@ -32,15 +32,14 @@ rsemMkIndex prefix anno fstqs = do
     indexExist >>= \case
         True -> hPutStrLn stderr "RSEM index directory exists. Skipped."
         False -> shelly $ do
-            mkdir_p $ fromText $ T.pack dir
+            mkdir_p dir
             liftIO $ hPutStrLn stderr "Generating RSEM indices"
             run_ "rsem-prepare-reference" [ "--gtf", T.pack anno
                 , T.intercalate "," $ map T.pack fstqs, T.pack prefix ]
     return prefix
   where
     dir = takeDirectory prefix
-    indexExist = shelly $ fmap and $ forM exts $ \ext ->
-        test_f $ fromText $ T.pack $ prefix <> ext
+    indexExist = shelly $ fmap and $ forM exts $ \ext -> test_f $ prefix <> ext
       where
         exts = [".idx.fa", ".seq"]
 
@@ -80,4 +79,4 @@ rsemQuant outputPrefix indexPrefix input opt = shelly $ do
         transcriptQuant = location .~ outputPrefix ++ ".isoforms.results" $ emptyFile
     return (geneQuant, transcriptQuant)
   where
-    rsem = fromText $ T.pack $ opt^.rsemPath ++ "rsem-calculate-expression"
+    rsem = opt^.rsemPath ++ "rsem-calculate-expression"
