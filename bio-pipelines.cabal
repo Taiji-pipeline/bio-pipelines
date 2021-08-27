@@ -30,6 +30,7 @@ library
   build-depends:
       base >=4.0 && <5.0
     , aeson
+    , async
     , bytestring
     , binary
     , bio-experiments

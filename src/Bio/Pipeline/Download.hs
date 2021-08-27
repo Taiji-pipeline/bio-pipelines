@@ -23,6 +23,7 @@ import           Data.Coerce                (coerce)
 import           Data.List                  (nub, isPrefixOf)
 import           Data.List.Split            (splitOn)
 import Data.Conduit.Zlib (multiple, ungzip)
+import Control.Concurrent.Async (forConcurrently, concurrently)
 import           Data.Maybe
 import Data.Char (toUpper)
 import           Data.Singletons
@@ -59,10 +60,10 @@ sraToFastq outDir temp input = if input `hasTag` PairedEnd
     fasterqDump fl = withTempDir (Just temp) $ \tmpDir -> do
         let f1_name = outDir ++ "/" ++ fl^.location ++ ".fastq.gz"
             f1 = location .~ f1_name $ fl
-        outputs <- forM (splitOn "+" $ fl^.location) $ \f -> do
+        outputs <- forConcurrently (splitOn "+" $ fl^.location) $ \f -> do
             let output = T.pack $ outDir ++ "/" ++ f ++ ".fastq"
             shelly $ run_ "fasterq-dump"
-                ["-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir]
+                ["-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir, "-f"]
             return output
         shelly $ escaping False $ do
             run_ "cat" $ outputs ++ ["|", "gzip", "-c", ">", T.pack f1_name]
@@ -71,17 +72,19 @@ sraToFastq outDir temp input = if input `hasTag` PairedEnd
     fasterqDumpPair fl = withTempDir (Just temp) $ \tmpDir -> do
         let f1_name = outDir ++ "/" ++ fl^.location ++ "_1.fastq.gz"
             f2_name = outDir ++ "/" ++ fl^.location ++ "_2.fastq.gz"
-        (outputs1, outputs2) <- fmap unzip $ forM (splitOn "+" $ fl^.location) $ \f -> do
+        (outputs1, outputs2) <- fmap unzip $ forConcurrently (splitOn "+" $ fl^.location) $ \f -> do
             let f1 = T.pack $ outDir ++ "/" ++ f ++ "_1.fastq"
                 f2 = T.pack $ outDir ++ "/" ++ f ++ "_2.fastq"
             shelly $ run_ "fasterq-dump"
-                ["--split-files", "-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir]
+                ["--split-files", "-O", T.pack outDir, T.pack f, "-t", T.pack tmpDir, "-f"]
             return (f1,f2)
-        shelly $ escaping False $ do
-            run_ "cat" $ outputs1 ++ ["|", "gzip", "-c", ">", T.pack f1_name]
-            run_ "rm" outputs1
-            run_ "cat" $ outputs2 ++ ["|", "gzip", "-c", ">", T.pack f2_name]
-            run_ "rm" outputs2
+        concurrently ( shelly $ escaping False $ do
+                run_ "cat" $ outputs1 ++ ["|", "gzip", "-c", ">", T.pack f1_name]
+                run_ "rm" outputs1 )
+                ( shelly $ escaping False $ do
+                    run_ "cat" $ outputs2 ++ ["|", "gzip", "-c", ">", T.pack f2_name]
+                    run_ "rm" outputs2
+                )
         return ( (coerce (location .~ f1_name $ fl) :: File '[Gzip] 'Fastq)
                , (coerce (location .~ f2_name $ fl) :: File '[Gzip] 'Fastq) )
     fastqDump fl = do
