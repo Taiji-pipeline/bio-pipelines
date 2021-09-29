@@ -52,7 +52,7 @@ bwaMkIndex input idx = do
             mkdir_p dir
             liftIO $ hPutStrLn stderr "Generating BWA index"
             cp input idx
-            run_ "bwa" ["index", "-p", T.pack idx, "-a", "bwtsw", T.pack input]
+            run_ "bwa-mem2" ["index", "-p", T.pack idx, T.pack input]
     return idx
   where
     dir = takeDirectory idx
@@ -68,7 +68,7 @@ bwaAlign :: FilePath  -- ^ Path for the output bam file
          -> IO ( Either (File (Delete 'Gzip tags) 'Bam)
                         (File (Insert' 'PairedEnd (Delete 'Gzip tags)) 'Bam) )
 bwaAlign output index fastq opt = do
-    shelly $ escaping False $ bashPipeFail bash_ "bwa" $
+    shelly $ escaping False $ bashPipeFail bash_ "bwa-mem2" $
         [ "mem", "-M"  -- "picard compatibility"
         , "-k", T.pack $ show $ opt^.bwaSeedLen
         , "-t", nCore

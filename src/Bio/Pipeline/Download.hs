@@ -22,6 +22,7 @@ import           Control.Monad
 import qualified Data.ByteString.Char8      as B
 import           Data.Coerce                (coerce)
 import           Data.List                  (nub, isPrefixOf)
+import           Data.List.Ordered          (nubSort)
 import           Data.List.Split            (splitOn)
 import Data.Conduit.Zlib (multiple, ungzip)
 import Control.Concurrent.Async (forConcurrently_, forConcurrently, concurrently)
@@ -162,20 +163,21 @@ sraToFastq outDir temp input = shelly (test_px "fasterq-dump") >>= \case
         let tmpOutDir = tmpDir <> "/output/"
             sraAccessions = T.splitOn "+" $ T.pack $ input^.location
         forConcurrently_ sraAccessions $ \acc -> shelly $ run_ "fasterq-dump"
-            ["--split-files", "-O", T.pack tmpOutDir, acc, "-t", T.pack tmpDir]
+            [ "--split-files", "--include-technical"
+            , "-O", T.pack tmpOutDir, acc, "-t", T.pack tmpDir ]
         suffixes <- nubSort . map (stripPrefixes sraAccessions . snd . T.breakOnEnd "/") <$>
             shelly (lsT tmpOutDir)
         forConcurrently suffixes $ \suffix -> do
             let files = map (\acc -> T.pack tmpOutDir <> acc <> suffix) sraAccessions
-                output = outDir ++ "/" <> fl^.location <> T.unpack suffix
+                output = outDir ++ "/" <> input^.location <> T.unpack suffix <> ".gz"
             shelly $ escaping False $ bashPipeFail bash_ "cat" $
                 files ++ ["|", "gzip", "-c", ">", T.pack output]
-            return $ coerce $ location .~ output $ fl
+            return $ coerce $ location .~ output $ input
   where
     stripPrefixes prefixes txt = fromMaybe (error $ "Unexpected file: " <> show txt) $
         foldl f Nothing prefixes
       where
-        f Nothing prefix = stripPrefix prefix txt
+        f Nothing prefix = T.stripPrefix prefix txt
         f suffix _ = suffix
 {-# INLINE sraToFastq #-}
 
