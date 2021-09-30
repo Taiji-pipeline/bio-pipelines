@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module Bio.Pipeline.NGS.Utils
     ( filterBam
     , filterBamSort
@@ -21,15 +22,16 @@ module Bio.Pipeline.NGS.Utils
     , bedToBigBed
     , bedToBigWig
     , bedGraphToBigWig
+    , bamToUniqFragment
     ) where
 
-import           Bio.Data.Bam                (bamToBedC, streamBam, getBamHeader,
-                                              sortedBamToBedPE )
+import           Bio.Data.Bam                (bamToBedC, sortedBamToBedPE)
 import           Bio.Data.Bed
 import           Bio.Data.Bed.Utils (clipBed)
 import           Bio.Data.Experiment
 import           Conduit
 import Data.Conduit.Internal (zipSinks)
+import qualified Data.Conduit.List as CL
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
@@ -42,7 +44,12 @@ import           Shelly  hiding (FilePath)
 import qualified Data.HashMap.Strict as M
 import qualified Data.Map.Strict as Map
 import Data.Double.Conversion.ByteString (toShortest)
+import Bio.HTS.Utils (makeKeyPair, BAMKey(..))
+import Bio.HTS.Types
+import Bio.HTS.BAM
 import Data.Char (isDigit)
+import Data.Function (on)
+import Data.ByteString.Lex.Integral (packDecimal)
 
 import Bio.Pipeline.Utils
 
@@ -299,3 +306,40 @@ mkBedGraph output input nReads = runResourceT $ runConduit $ streamBed input .|
 escapeFileName :: T.Text -> T.Text
 escapeFileName = T.replace "'" "'\"\\'\"'"
 {-# INLINE escapeFileName #-}
+
+bamToUniqFragment :: FilePath
+                  -> BAMHeader 
+                  -> ConduitT (BAM, BAM) BED (ResourceT IO) ()
+bamToUniqFragment tmpdir header = do
+    concatMapC toBed .| unlinesAsciiC .| sinkFile tmp
+    liftIO $ shelly $ escaping False $ run_ "sort" ["-T", T.pack tmpdir, "-k1,1"
+            , T.pack tmp, ">", T.pack tmpSort]
+    sourceFile tmpSort .| linesUnboundedAsciiC .| mapC f .|
+        CL.groupBy ((==) `on` fst) .| mapC (\x -> score .~ Just (length x) $ snd $ head x)
+  where
+    f x = let (a, b) = B.break (=='\t') x
+          in (a, fromLine $ B.tail b)
+    tmp = tmpdir <> "/tmp.bed"
+    tmpSort = tmpdir <> "/tmpsort.bed"
+    toBed (a, b) = do
+        chr1 <- refName header a
+        chr2 <- refName header b
+        let bed = toLine $ BED chr1 (min start1 start2) (max end1 end2) (Just $ queryName a) Nothing Nothing
+        if chr1 == chr2
+            then return $ key <> "\t" <> bed 
+            else mzero
+      where
+        start1 = startLoc a
+        end1 = endLoc a
+        start2 = startLoc b
+        end2 = endLoc b
+        key = mkKey (a, b)
+    mkKey x = let Pair{..} = makeKeyPair (const Nothing) x
+              in B.concat
+                    [ fromJust $ packDecimal _ref_id1
+                    , fromJust $ packDecimal _ref_id2
+                    , fromJust $ packDecimal _loc1
+                    , fromJust $ packDecimal _loc2
+                    , B.pack $ show _orientation
+                    , if _leftmost then "1" else "0" ]
+{-# INLINE bamToUniqFragment #-}

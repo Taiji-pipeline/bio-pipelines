@@ -1,16 +1,18 @@
-resolver: nightly-2019-05-25
+resolver: lts-18.8
 
 packages:
   - '.'
 
 extra-deps:
   - git:     https://github.com/Taiji-pipeline/bio-experiments.git
-    commit:  5fd7472babf427606058594c089abf689b7b89f4
+    commit:  a2ee85471bc92005dfbc68fd11d31f9892467730
+
+  - git:     https://github.com/kaizhang/HsHTSLib.git
+    commit:  a2fcc435fc752152f06f14e0cfa56153fa0b7d02
 
   - git:     https://github.com/kaizhang/bioinformatics-toolkit.git
-    commit:  63cdf06a2631ebf495afc094c3ba3544ed89fb55
+    commit:  463cb8d16230a0777072e8793338b89a7c420487
     subdirs:
         - bioinformatics-toolkit
 
-  - HsHTSLib-1.9.2
   - clustering-0.4.1
