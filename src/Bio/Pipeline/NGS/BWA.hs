@@ -58,7 +58,7 @@ bwaMkIndex input idx = do
     dir = takeDirectory idx
     indexExist = shelly $ fmap and $ forM exts $ \ext -> test_f $ idx <> ext
       where
-        exts = ["", ".amb", ".ann", ".bwt", ".pac", ".sa"]
+        exts = ["", ".amb", ".ann", ".pac", ".bwt.2bit.64"]
 
 bwaAlign :: FilePath  -- ^ Path for the output bam file
          -> FilePath  -- ^ Genome index
