@@ -335,11 +335,13 @@ bamToUniqFragment tmpdir header = do
         end2 = endLoc b
         key = mkKey (a, b)
     mkKey x = let Pair{..} = makeKeyPair (const Nothing) x
+                  show' y | y >= 0 = fromJust $ packDecimal y
+                          | otherwise = "-" <> fromJust (packDecimal $ negate y)
               in B.concat
-                    [ fromJust $ packDecimal _ref_id1
-                    , fromJust $ packDecimal _ref_id2
-                    , fromJust $ packDecimal _loc1
-                    , fromJust $ packDecimal _loc2
+                    [ show' _ref_id1, "-"
+                    , show' _ref_id2, "-"
+                    , show' _loc1, "-"
+                    , show' _loc2
                     , B.pack $ show _orientation
                     , if _leftmost then "1" else "0" ]
 {-# INLINE bamToUniqFragment #-}
