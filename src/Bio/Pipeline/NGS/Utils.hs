@@ -21,6 +21,7 @@ module Bio.Pipeline.NGS.Utils
     , concatBed
     , bedToBigBed
     , bedToBigWig
+    , bedToBigWigC
     , bedGraphToBigWig
     , bamToUniqFragment
     ) where
@@ -290,6 +291,31 @@ bedToBigWig output chrSizes blacklist tmpdir input = shelly (test_px "bedGraphTo
                 _ -> BED3 (bed^.chrom) (bed^.chromStart) (min n $ bed^.chromStart + 100)
         chrSize = M.fromList chr
 {-# INLINE bedToBigWig #-}
+
+-- | Create a bigwig file from a bed file.
+bedToBigWigC :: BEDLike b
+             => FilePath   -- output
+             -> FilePath   -- tmp
+             -> [(B.ByteString, Int)]   -- ^ Chromosome sizes
+             -> ConduitT b Void (ResourceT IO) ()
+bedToBigWigC output tmpdir chrSizes = do
+    liftIO $ shelly (test_px "bedGraphToBigWig") >>= \case
+        False -> error "Please download: bedGraphToBigWig"
+        True -> return ()
+    (numReads, tmpBed) <- zipSinks (mapC size .| sumC) $
+        mapC ((toLine :: BED3 -> B.ByteString) . convert) .| unlinesAsciiC .| 
+        sinkTempFile tmpdir "tmp.bed."
+    tmpChr <- yieldMany chrSizes .| mapC (\(a,b) -> a <> "\t" <> B.pack (show b)) .|
+        unlinesAsciiC .| sinkTempFile tmpdir "tmp.chr."
+    tmpF <- yield "" .| sinkTempFile tmpdir "tmp.file."
+    liftIO $ shelly $ do
+        setenv "LC_COLLATE" "C"
+        escaping False $ run_ "sort"
+            ["-S", "4G", "-k", "1,1", "-k2,2n", T.pack tmpBed, ">", T.pack tmpF]
+    liftIO $ do
+        mkBedGraph tmpBed tmpF numReads
+        shelly $ run_ "bedGraphToBigWig" [T.pack tmpBed, T.pack tmpChr, T.pack output]
+{-# INLINE bedToBigWigC #-}
 
 mkBedGraph :: FilePath  -- ^ Output
            -> FilePath  -- ^ Coordinate sorted bed files
