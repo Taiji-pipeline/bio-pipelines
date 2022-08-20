@@ -53,7 +53,8 @@ library
     , lens
     , mtl
     , matrices >= 0.4.4
-    , singletons >= 2.5
+    , singletons >= 3.0
+    , singletons-base
     , text
     , temporary
     , split

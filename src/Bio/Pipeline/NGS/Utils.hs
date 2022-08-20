@@ -37,8 +37,8 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.Conduit.Zlib           (gzip, ungzip)
 import           Data.Maybe                  (fromJust)
-import           Data.Singletons.Prelude      (Elem, If, SingI)
-import           Data.Singletons.Prelude.List (Delete)
+import           Prelude.Singletons (Elem, If, SingI)
+import Data.List.Singletons (Delete)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Text                   as T
 import           Shelly  hiding (FilePath)
@@ -337,7 +337,8 @@ bamToUniqFragment :: FilePath
                   -> BAMHeader 
                   -> ConduitT (BAM, BAM) BED (ResourceT IO) ()
 bamToUniqFragment tmpdir header = do
-    concatMapC toBed .| unlinesAsciiC .| sinkFile tmp
+    tmp <- concatMapC toBed .| unlinesAsciiC .| sinkTempFile tmpdir "tmp.bed"
+    tmpSort <- yield "" .| sinkTempFile tmpdir "tmp.bed"
     liftIO $ shelly $ escaping False $ run_ "sort" ["-T", T.pack tmpdir, "-k1,1"
             , T.pack tmp, ">", T.pack tmpSort]
     sourceFile tmpSort .| linesUnboundedAsciiC .| mapC f .|
@@ -345,8 +346,6 @@ bamToUniqFragment tmpdir header = do
   where
     f x = let (a, b) = B.break (=='\t') x
           in (a, fromLine $ B.tail b)
-    tmp = tmpdir <> "/tmp.bed"
-    tmpSort = tmpdir <> "/tmpsort.bed"
     toBed (a, b) = do
         chr1 <- refName header a
         chr2 <- refName header b

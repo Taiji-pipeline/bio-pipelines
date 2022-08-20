@@ -29,10 +29,11 @@ module Bio.Pipeline.CallPeaks
 import qualified Bio.Data.Bed          as Bed
 import           Bio.Data.Experiment
 import           Conduit
+import Data.Conduit.Internal (zipSinks)
 import           Control.Lens
 import           Control.Monad
 import qualified Data.ByteString.Char8 as B
-import           Data.Conduit.Zlib     (gzip, ungzip)
+import           Data.Conduit.Zlib     (gzip)
 import           Data.Default          (Default (..))
 import           Data.List
 import           Data.Ord
@@ -140,20 +141,17 @@ macs2 output target input fileformat opt = withTempDirectory (opt^.tmpDir)
 {-# INLINE macs2 #-}
 
 -- | Fraction of reads in peaks
-frip :: SingI tags1
+frip :: (SingI tags1, SingI tags2)
      => File tags1 'Bed        -- ^ reads
      -> File tags2 'NarrowPeak -- ^ peaks
      -> IO Double
 frip rs peak = do
-    n <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
-        (if rs `hasTag` Gzip then ungzip else mapC id) .|
-        linesUnboundedAsciiC .| lengthC
-    p <- Bed.readBed $ peak^.location :: IO [Bed.BED3]
-    m <- runResourceT $ runConduit $ sourceFileBS (rs^.location) .|
-        (if rs `hasTag` Gzip then ungzip else mapC id) .| linesUnboundedAsciiC .|
-        mapC (Bed.fromLine :: B.ByteString -> Bed.BED3) .| Bed.intersectBed p .|
-        lengthC
+    p <- runResourceT $ runConduit $ streamer peak .| sinkList
+    (m, n) <- runResourceT $ runConduit $ streamer rs .| zipSinks (Bed.intersectBed p .| lengthC) lengthC
     return $ fromIntegral (m :: Int) / fromIntegral (n :: Int)
+  where
+    streamer :: SingI tags => File tags file -> ConduitT () Bed.BED3 (ResourceT IO) ()
+    streamer x = if x `hasTag` Gzip then Bed.streamBedGzip (x^.location) else Bed.streamBed (x^.location)
 
 idrMultiple :: [File tags 'NarrowPeak]   -- ^ Peaks
             -> File tags 'NarrowPeak  -- ^ Merged peaks

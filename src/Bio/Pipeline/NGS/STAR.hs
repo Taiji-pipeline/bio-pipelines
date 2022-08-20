@@ -22,10 +22,10 @@ import           Control.Lens                ((.~), (^.), makeLenses)
 import           Control.Monad.State.Lazy
 import           Data.Either                 (isRight)
 import           Data.Maybe                  (isJust)
-import           Data.Singletons.Prelude.List (Delete)
+import Data.List.Singletons (Delete)
 import           Data.Singletons             (SingI)
 import qualified Data.Text                   as T
-import           Shelly                      (fromText, mkdir_p, cp, run_,
+import           Shelly                      (mkdir_p, cp, run_,
                                               shelly, test_f)
 import           System.IO                   (hPutStrLn, stderr)
 import           System.IO.Temp              (withTempDirectory)
